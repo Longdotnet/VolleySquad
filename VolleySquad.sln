@@ -1,0 +1,53 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "VolleySquad.Api", "VolleySquad.Api", "{D9EE66DC-4267-B4AA-2FA9-7F35C82533E9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VolleySquad.Api", "VolleySquad.Api\VolleySquad.Api\VolleySquad.Api.csproj", "{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ranking.Worker", "Ranking.Worker\Ranking.Worker.csproj", "{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|x64.Build.0 = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Debug|x86.Build.0 = Debug|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|x64.ActiveCfg = Release|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|x64.Build.0 = Release|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|x86.ActiveCfg = Release|Any CPU
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD}.Release|x86.Build.0 = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|x64.Build.0 = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Debug|x86.Build.0 = Debug|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|x64.ActiveCfg = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|x64.Build.0 = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|x86.ActiveCfg = Release|Any CPU
+		{3D633993-6A65-4BD8-AEF7-6B9AA1E5AA4C}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EADC326C-9CED-4597-AA98-84E2E8F3B4CD} = {D9EE66DC-4267-B4AA-2FA9-7F35C82533E9}
+	EndGlobalSection
+EndGlobal

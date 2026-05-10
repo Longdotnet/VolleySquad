@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VolleySquad - Quản lý bóng chuyền chuyên nghiệp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+        }
+
+        .player-card {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #000;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .player-card:hover {
+            transform: translateY(-5px) rotate(2deg);
+        }
+
+        .player-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: rotate(30deg);
+            pointer-events: none;
+        }
+
+        .slot-active {
+            border-color: #10b981;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-gradient {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+        }
+
+        .btn-gradient:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .badge-status {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 99px;
+        }
+    </style>
+</head>
+<body class="pb-20">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 px-6 py-4 glass-card mx-4 mt-4 mb-8 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div class="bg-blue-600 p-2 rounded-lg">
+                <i class="fas fa-volleyball text-white text-xl"></i>
+            </div>
+            <span class="font-extrabold text-xl tracking-tight">VOLLEY<span class="text-blue-500">SQUAD</span></span>
+        </div>
+        <div class="flex items-center gap-4">
+            <button class="relative">
+                <i class="far fa-bell text-xl text-slate-400"></i>
+                <span class="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
+            </button>
+            <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
+                <img src="https://ui-avatars.com/api/?name=Admin+Ball&background=random" class="w-8 h-8 rounded-full border-2 border-blue-500" alt="User">
+                <span class="hidden md:block text-sm font-semibold">Tài Admin</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 max-w-6xl">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Cột 1: Thông tin trận đấu & Đăng ký -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Match Banner -->
+                <div class="glass-card p-6 border-l-4 border-blue-500">
+                    <div class="flex flex-col md:flex-row justify-between gap-4">
+                        <div>
+                            <span class="bg-blue-500/20 text-blue-400 badge-status font-bold uppercase tracking-wider">Trận đấu tiếp theo</span>
+                            <h2 class="text-3xl font-bold mt-2">Giao lưu Sân Bình Minh</h2>
+                            <p class="text-slate-400 mt-1"><i class="far fa-calendar-alt mr-2"></i>Thứ 7, 18:00 - 20:00 | Sân số 3</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-slate-400">Trạng thái Slot</div>
+                            <div class="text-2xl font-bold text-emerald-400">12 / 18 <span class="text-sm text-slate-500 font-normal">đã đăng ký</span></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar Slot -->
+                    <div class="w-full bg-slate-800 h-3 rounded-full mt-6 overflow-hidden">
+                        <div class="bg-emerald-500 h-full w-[66%] shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        <button class="btn-gradient py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2">
+                            <i class="fas fa-plus-circle"></i> Đăng ký ngay
+                        </button>
+                        <button class="bg-slate-800 hover:bg-slate-700 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2">
+                            <i class="fas fa-share-alt"></i> Mời bạn
+                        </button>
+                        <button class="bg-orange-500/10 text-orange-400 border border-orange-500/20 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2">
+                            <i class="fas fa-exchange-alt"></i> Pass Slot
+                        </button>
+                        <button class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2">
+                            <i class="fas fa-qrcode"></i> Đóng tiền
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Đội hình dự kiến -->
+                <div class="glass-card p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold">Chia Đội Dự Kiến <span class="text-xs text-slate-500 font-normal ml-2">(Tự động cân bằng)</span></h3>
+                        <button class="text-blue-400 text-sm hover:underline"><i class="fas fa-sync-alt mr-1"></i> Xếp lại</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Team A -->
+                        <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                                <span class="font-bold text-blue-400">TEAM A</span>
+                                <span class="text-xs font-bold text-slate-500">65 Pts</span>
+                            </div>
+                            <ul class="space-y-3">
+                                <li class="flex justify-between text-sm"><span>Thắng "Búa"</span> <span class="text-slate-500">S</span></li>
+                                <li class="flex justify-between text-sm"><span>Tài Admin</span> <span class="text-slate-500">OH</span></li>
+                                <li class="flex justify-between text-sm"><span>Dũng Trố</span> <span class="text-slate-500">MB</span></li>
+                                <li class="flex justify-between text-sm"><span>Hùng Cận</span> <span class="text-slate-500">OP</span></li>
+                                <li class="flex justify-between text-sm"><span>Nam Lùn</span> <span class="text-slate-500">L</span></li>
+                                <li class="flex justify-between text-sm"><span>Bảo Bảo</span> <span class="text-slate-500">OH</span></li>
+                            </ul>
+                        </div>
+                        <!-- Team B -->
+                        <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                                <span class="font-bold text-emerald-400">TEAM B</span>
+                                <span class="text-xs font-bold text-slate-500">64 Pts</span>
+                            </div>
+                             <ul class="space-y-3">
+                                <li class="text-sm text-slate-400 italic">Đang chờ chốt...</li>
+                            </ul>
+                        </div>
+                        <!-- Team C -->
+                        <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                                <span class="font-bold text-purple-400">TEAM C</span>
+                                <span class="text-xs font-bold text-slate-500">66 Pts</span>
+                            </div>
+                             <ul class="space-y-3">
+                                <li class="text-sm text-slate-400 italic">Đang chờ chốt...</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Cột 2: Profile & Xếp hạng -->
+            <div class="space-y-8">
+                
+                <!-- Player Card (The Hook) -->
+                <div class="player-card w-full rounded-[30px] p-6 shadow-2xl relative">
+                    <div class="flex justify-between items-start">
+                        <div class="text-4xl font-black italic">88</div>
+                        <div class="text-xs font-bold bg-black/10 px-2 py-1 rounded">OH / ACE</div>
+                    </div>
+                    <div class="flex justify-center my-4">
+                        <img src="https://ui-avatars.com/api/?name=Tai+Admin&size=128&background=000&color=fff" class="w-24 h-24 rounded-full border-4 border-black/20" alt="Avatar">
+                    </div>
+                    <div class="text-center">
+                        <h4 class="text-xl font-extrabold uppercase">Tài Admin</h4>
+                        <div class="flex justify-center gap-4 mt-4 text-[10px] font-bold">
+                            <div class="text-center"><p class="text-black/50">CÔNG</p><p class="text-lg">92</p></div>
+                            <div class="text-center"><p class="text-black/50">THỦ</p><p class="text-lg">75</p></div>
+                            <div class="text-center"><p class="text-black/50">CHUYỀN</p><p class="text-lg">80</p></div>
+                            <div class="text-center"><p class="text-black/50">GIAO</p><p class="text-lg">88</p></div>
+                        </div>
+                    </div>
+                    <button class="w-full mt-6 bg-black text-white py-2 rounded-xl text-xs font-bold hover:bg-slate-900">
+                        <i class="fas fa-download mr-1"></i> Tải Thẻ Khoe Zalo
+                    </button>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="glass-card p-6">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-trophy text-yellow-500"></i> Bảng Xếp Hạng
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-3 bg-blue-500/10 p-3 rounded-2xl border border-blue-500/20">
+                            <span class="font-bold text-blue-400 w-4">1</span>
+                            <img src="https://ui-avatars.com/api/?name=Thang+Bua&background=random" class="w-8 h-8 rounded-full" alt="">
+                            <div class="flex-1">
+                                <p class="text-sm font-bold">Thắng "Búa"</p>
+                                <p class="text-[10px] text-slate-500">Chủ công</p>
+                            </div>
+                            <span class="font-bold text-sm text-blue-400">950 <i class="fas fa-fire ml-1"></i></span>
+                        </div>
+                        <div class="flex items-center gap-3 p-3">
+                            <span class="font-bold text-slate-500 w-4">2</span>
+                            <img src="https://ui-avatars.com/api/?name=Tai+Admin&background=random" class="w-8 h-8 rounded-full" alt="">
+                            <div class="flex-1">
+                                <p class="text-sm font-bold">Tài Admin</p>
+                                <p class="text-[10px] text-slate-500">Chủ công</p>
+                            </div>
+                            <span class="font-bold text-sm text-slate-300">912</span>
+                        </div>
+                        <div class="flex items-center gap-3 p-3">
+                            <span class="font-bold text-slate-500 w-4">3</span>
+                            <img src="https://ui-avatars.com/api/?name=Dung+Tro&background=random" class="w-8 h-8 rounded-full" alt="">
+                            <div class="flex-1">
+                                <p class="text-sm font-bold">Dũng Trố</p>
+                                <p class="text-[10px] text-slate-500">Phụ công</p>
+                            </div>
+                            <span class="font-bold text-sm text-slate-300">885</span>
+                        </div>
+                    </div>
+                    <button class="w-full mt-6 text-slate-500 text-sm font-semibold hover:text-white transition-colors">
+                        Xem tất cả bảng xếp hạng
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Bottom Mobile Menu -->
+    <div class="md:hidden fixed bottom-4 left-4 right-4 glass-card p-4 flex justify-around items-center shadow-2xl z-50">
+        <button class="text-blue-500"><i class="fas fa-home text-xl"></i></button>
+        <button class="text-slate-500"><i class="fas fa-calendar-check text-xl"></i></button>
+        <button class="bg-blue-600 w-12 h-12 rounded-full -mt-10 border-4 border-[#0f172a] shadow-lg flex items-center justify-center text-white"><i class="fas fa-plus"></i></button>
+        <button class="text-slate-500"><i class="fas fa-wallet text-xl"></i></button>
+        <button class="text-slate-500"><i class="fas fa-user text-xl"></i></button>
+    </div>
+
+</body>
+</html>
