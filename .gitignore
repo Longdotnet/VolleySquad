@@ -1,14 +1,6 @@
 # ============================================================
 # .GITIGNORE - Các file KHÔNG được commit lên Git
 # ============================================================
-
-# ============================================================
-# ⚠️ SECURITY: Secret files - TUYỆT ĐỐI không commit!
-# ============================================================
-# User Secrets (dotnet user-secrets): Chứa JWT key, DB password, API key...
-# Lưu tại: %APPDATA%\Microsoft\UserSecrets\<project-guid>\secrets.json
-# KHÔNG nằm trong project folder nên không cần .gitignore,
-# nhưng nếu bạn tự tạo secrets.json trong project thì cần ignore.
 secrets.json
 *.secrets.json
 
