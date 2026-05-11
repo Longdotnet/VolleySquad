@@ -1,15 +1,15 @@
-﻿// ============================================================
-// MATCH CONTROLLER - Quản lý trận đấu và đăng ký slot
-// ============================================================
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VolleySquad.Api.Domain;
+using VolleySquad.Api.Domain.Exceptions;
 using VolleySquad.Api.Infrastructure;
-using VolleySquad.Api.Services;
+using VolleySquad.Api.Services.Interfaces;
 using MassTransit;
 using VolleySquad.Api.Contracts;
+using VolleySquad.Api.Hubs;
 
 namespace VolleySquad.Api.Controllers
 {
@@ -19,18 +19,21 @@ namespace VolleySquad.Api.Controllers
     [ApiController]
     public class MatchController : ControllerBase
     {
-        // readonly: field không bị reassign sau constructor => an toàn hơn trong môi trường concurrent
-        private readonly TeamService _teamService;
+    // readonly: field không bị reassign sau constructor => an toàn hơn trong môi trường concurrent
+        private readonly ITeamService _teamService;
         private readonly AppDbContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
+        private readonly IHubContext<MatchHub> _matchHub;
 
-        // DI Container tự inject TeamService và AppDbContext khi request đến.
+        // DI Container tự inject ITeamService và AppDbContext khi request đến.
         // Không cần new() thủ công => dễ unit test (có thể truyền mock object vào).
-        public MatchController(TeamService teamService, AppDbContext context, IPublishEndpoint publishEndpoint)
+        // ITeamService thay vì TeamService cụ thể: Đúng chuẩn Dependency Inversion.
+        public MatchController(ITeamService teamService, AppDbContext context, IPublishEndpoint publishEndpoint, IHubContext<MatchHub> matchHub)
         {
             _teamService = teamService;
             _context = context;
             _publishEndpoint = publishEndpoint;
+            _matchHub = matchHub;
         }
 
         // ============================================================
@@ -85,8 +88,21 @@ namespace VolleySquad.Api.Controllers
             var players = await _context.Members.ToListAsync();
             if (players.Count < 3) return BadRequest("Không đủ người để chia 3 đội (cần ít nhất 3 người)!");
 
+            // TeamResult (Value Object) thay vì List<List<Member>>:
+            // - Type-safe: result.TeamA thay vì result[0]
+            // - Có built-in metrics: MaxSkillDifference, IsBalancedInSize
             var result = _teamService.BalanceTeams(players);
-            return Ok(new { TeamA = result[0], TeamB = result[1], TeamC = result[2] });
+            return Ok(new
+            {
+                TeamA = result.TeamA,
+                TeamB = result.TeamB,
+                TeamC = result.TeamC,
+                TeamATotalSkill = result.TeamATotalSkill,
+                TeamBTotalSkill = result.TeamBTotalSkill,
+                TeamCTotalSkill = result.TeamCTotalSkill,
+                MaxSkillDifference = result.MaxSkillDifference,
+                IsBalanced = result.IsBalancedInSize
+            });
         }
 
         // ============================================================
@@ -144,6 +160,16 @@ namespace VolleySquad.Api.Controllers
                 match.RegisteredMemberIds.Add(memberId);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync(); // Ghi vĩnh viễn vào DB
+
+                // Push real-time notification qua SignalR
+                await _matchHub.Clients
+                    .Group($"match-{matchId}")
+                    .SendAsync("SlotUpdated", new
+                    {
+                        matchId,
+                        registeredCount = match.RegisteredMemberIds.Count,
+                        maxSlots = match.MaxSlots
+                    });
 
                 return Ok("Đăng ký thành công!");
             }
@@ -443,6 +469,9 @@ namespace VolleySquad.Api.Controllers
         // ============================================================
         // POST /api/match/finish - Admin chốt kết quả trận đấu
         // ============================================================
+        // request.WinningTeamMemberIds: Danh sách Id thành viên đội thắng
+        // request.LosingTeamMemberIds:  Danh sách Id thành viên đội thua
+        // Ranking.Worker sẽ dùng các danh sách này để cập nhật SkillPoint
         [HttpPost("finish")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> FinishMatch([FromBody] FinishMatchRequest request)
@@ -450,18 +479,73 @@ namespace VolleySquad.Api.Controllers
             var match = await _context.Matches.FindAsync(request.MatchId);
             if (match == null) return NotFound("Không tìm thấy trận đấu");
 
-            // TODO: Thêm logic xác thực `WinningTeamId` hợp lệ
+            // Xác thực danh sách thành viên thuộc trận đấu
+            var allRequested = request.WinningTeamMemberIds.Concat(request.LosingTeamMemberIds).ToList();
+            var invalidIds = allRequested.Where(id => !match.RegisteredMemberIds.Contains(id)).ToList();
+            if (invalidIds.Count > 0)
+                return BadRequest($"Một số thành viên không thuộc trận đấu này: {string.Join(", ", invalidIds)}");
 
             // Bắn event MatchFinishedEvent lên RabbitMQ
             await _publishEndpoint.Publish(new MatchFinishedEvent
             {
                 MatchId = request.MatchId,
-                WinningTeamId = request.WinningTeamId
+                WinningTeamId = request.WinningTeamId,
+                WinningTeamMemberIds = request.WinningTeamMemberIds,
+                LosingTeamMemberIds = request.LosingTeamMemberIds
             });
 
             return Accepted("Đã tiếp nhận yêu cầu xử lý kết quả trận đấu.");
         }
 
-        public record FinishMatchRequest(Guid MatchId, Guid WinningTeamId);
+        public record FinishMatchRequest(
+            Guid MatchId,
+            Guid WinningTeamId,
+            List<Guid> WinningTeamMemberIds,
+            List<Guid> LosingTeamMemberIds);
+
+        // ============================================================
+        // POST /api/match/finalize/{matchId} - Admin chốt tiền sân
+        // ============================================================
+        // Tính FeePerPerson = TotalCourtFee / số thành viên đã đăng ký,
+        // đánh dấu IsSettled = true, sau đó publish MatchFinalizedEvent
+        // để Payment.Worker trừ Balance của từng thành viên bất đồng bộ.
+        [HttpPost("finalize/{matchId}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> FinalizeMatch(Guid matchId, [FromBody] FinalizeMatchRequest request)
+        {
+            var match = await _context.Matches.FindAsync(matchId);
+            if (match == null) return NotFound("Không tìm thấy trận đấu");
+
+            if (match.IsSettled)
+                return BadRequest("Trận đấu này đã được chốt tiền rồi");
+
+            if (match.RegisteredMemberIds.Count == 0)
+                return BadRequest("Chưa có thành viên nào đăng ký trận này");
+
+            if (request.TotalCourtFee <= 0)
+                return BadRequest("Tiền sân phải lớn hơn 0");
+
+            match.FeePerPerson = request.TotalCourtFee / match.RegisteredMemberIds.Count;
+            match.IsSettled = true;
+            await _context.SaveChangesAsync();
+
+            await _publishEndpoint.Publish(new VolleySquad.Api.Contracts.MatchFinalizedEvent
+            {
+                MatchId = matchId,
+                TotalCourtFee = request.TotalCourtFee,
+                RegisteredMemberIds = match.RegisteredMemberIds
+            });
+
+            return Ok(new
+            {
+                Message = "Đã chốt tiền sân thành công. Payment.Worker đang xử lý.",
+                MatchId = matchId,
+                TotalCourtFee = request.TotalCourtFee,
+                FeePerPerson = match.FeePerPerson,
+                MemberCount = match.RegisteredMemberIds.Count
+            });
+        }
+
+        public record FinalizeMatchRequest(decimal TotalCourtFee);
     }
 }

@@ -8,12 +8,16 @@
 // ============================================================
 
 using VolleySquad.Api.Services;
+using VolleySquad.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using VolleySquad.Api.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text;
 using MassTransit;
+using VolleySquad.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,18 +48,79 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// TeamService dùng AddScoped vì nó phụ thuộc vào AppDbContext (Scoped).
-// Nếu đăng ký AddSingleton thì sẽ bị lỗi Captive Dependency ở trên.
-builder.Services.AddScoped<TeamService>();
+// TeamService dùng AddSingleton vì:
+//   1. STATELESS: Không có field instance, chỉ xử lý input và trả output.
+//   2. THREAD-SAFE: Chỉ dùng local variables trong method, không shared state.
+//   3. KHÔNG inject Scoped dependency (AppDbContext) vào constructor.
+//   → Tạo 1 lần khi app start, dùng cho mọi request. Tiết kiệm GC overhead.
+//
+// So sánh với MemberService (Scoped):
+//   MemberService inject AppDbContext (Scoped) → phải là Scoped.
+//   TeamService KHÔNG inject AppDbContext → có thể là Singleton.
+//
+// ⚠️ CAPTIVE DEPENDENCY RULE:
+//   Singleton KHÔNG được inject Scoped/Transient service.
+//   Singleton ≥ Scoped ≥ Transient (lifetime phải >= dependency's lifetime).
+builder.Services.AddSingleton<ITeamService, TeamService>();
 
-// CORS: Cho phép React FE (localhost:5173) gọi API trong môi trường dev
+// MemberService dùng AddScoped vì inject AppDbContext (Scoped).
+// Interface binding: IMemberService → MemberService.
+// Controller inject IMemberService, không biết MemberService tồn tại.
+// → Testable: Trong unit test, inject Mock<IMemberService>() thay thế.
+builder.Services.AddScoped<IMemberService, MemberService>();
+
+// ============================================================
+// RATE LIMITING - Chống Brute Force & DoS (OWASP A05, A04)
+// ============================================================
+// OWASP Top 10:
+//   A05 Security Misconfiguration: Thiếu rate limiting = cấu hình sai
+//   A04 Insecure Design: Cho phép tấn công brute force vào endpoint login
+//
+// Fixed Window vs Sliding Window vs Token Bucket:
+//   Fixed Window:   100 req / 1 phút. Vấn đề: burst tấn công cuối cửa sổ này + đầu cửa sổ tiếp
+//   Sliding Window: Đếm req trong 60 giây gần nhất — chính xác hơn, tốn RAM hơn
+//   Token Bucket:   Đầy token thì mới cho req — cho phép burst ngắn tự nhiên
+//
+// .NET 7+ có built-in RateLimiter trong System.Threading.RateLimiting.
+// Đây là Fixed Window đơn giản cho demo; production nên dùng Redis-backed rate limiter
+// để hoạt động đúng trong môi trường nhiều server (horizontal scaling).
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("LoginPolicy", opt =>
+    {
+        opt.PermitLimit = 10;               // Tối đa 10 lần login
+        opt.Window = TimeSpan.FromMinutes(1); // trong vòng 1 phút
+        opt.QueueLimit = 0;                 // Không xếp hàng chờ
+    });
+
+    // Trả 429 Too Many Requests (đúng HTTP spec)
+    options.RejectionStatusCode = 429;
+});
+
+// ============================================================
+// CORS - Cross-Origin Resource Sharing
+// ============================================================
+// Same-Origin Policy: Browser mặc định chặn request từ origin A đến origin B.
+//   Frontend: http://localhost:5173 (origin A)
+//   Backend:  https://localhost:7202 (origin B — khác port = khác origin)
+//
+// CORS header server trả về: Access-Control-Allow-Origin: http://localhost:5173
+// Browser đọc header này và mới cho phép JS đọc response.
+//
+// AllowAnyHeader + AllowAnyMethod: OK cho development.
+// PRODUCTION: Hạn chế Method (GET, POST, PUT, DELETE) và Header cụ thể.
+// AllowCredentials: Bắt buộc cho SignalR WebSocket (gửi cookie/header auth qua WS).
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevFrontend", policy =>
         policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
-              .AllowAnyMethod());
+              .AllowAnyMethod()
+              .AllowCredentials()); // AllowCredentials bắt buộc cho SignalR WebSocket
 });
+
+// SignalR: Real-time communication hub
+builder.Services.AddSignalR();
 
 builder.Services.AddControllers();
 
@@ -129,14 +194,48 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// MassTransit với RabbitMQ
+// ============================================================
+// MASSTRANSIT + RABBITMQ - Message Broker cho Event-Driven Architecture
+// ============================================================
+// MassTransit là abstraction layer ở trên Message Broker.
+// Tương tự như Entity Framework là abstraction layer ở trên Database.
+//
+// Tại sao dùng Message Broker thay vì gọi trực tiếp (synchronous)?
+//   ĐỒNG BỘ (HTTP call trực tiếp):
+//     API → gọi RankingService.Calculate() → CHỜ xong → trả response
+//     Vấn đề: Nếu RankingService chết → API cũng thất bại
+//             Nếu Calculate() mất 3 giây → client chờ 3 giây
+//
+//   BẤT ĐỒNG BỘ (Message Broker):
+//     API → publish event vào Queue → trả response NGAY (fast!)
+//     RabbitMQ giữ event trong queue
+//     Ranking.Worker consume event và xử lý độc lập
+//     Nếu Worker chết → event vẫn trong queue → xử lý khi Worker online lại
+//
+// Dead Letter Queue (DLQ):
+//   Nếu Consumer crash sau N lần retry → message chuyển vào DLQ
+//   Admin xem lại DLQ để debug và republish.
+//
+// ⚠️ SECURITY FIX: Đọc RabbitMQ credentials từ config thay vì hardcode.
+// Hardcode "guest/guest" trong code:
+//   1. Lộ credentials khi push lên GitHub
+//   2. Production RabbitMQ không cho phép "guest" login từ remote host
+//   3. Không thể thay đổi credentials mà không cần sửa code và redeploy
+var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
+var rabbitUser = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+var rabbitPass = builder.Configuration["RabbitMQ:Password"] ?? "guest";
+// ⚠️ PRODUCTION: Thay giá trị mặc định bằng cách set trong môi trường:
+//   dotnet user-secrets set "RabbitMQ:Password" "your-strong-password"
+//   Hoặc dùng Environment Variables: RabbitMQ__Password=xxx (dấu __ = dấu : trong .NET config)
+
 builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host("localhost", "/", h => {
-            h.Username("guest");
-            h.Password("guest");
+        cfg.Host(rabbitHost, "/", h =>
+        {
+            h.Username(rabbitUser);
+            h.Password(rabbitPass);
         });
 
         cfg.ConfigureEndpoints(context);
@@ -172,6 +271,9 @@ if (app.Environment.IsDevelopment())
 // CORS phải đặt TRƯỚC Authentication/Authorization
 app.UseCors("DevFrontend");
 
+// Rate Limiting middleware — chặn request vượt giới hạn trước khi tới controller
+app.UseRateLimiter();
+
 // Tự động chuyển hướng HTTP sang HTTPS (bảo mật truyền tải)
 app.UseHttpsRedirection();
 
@@ -185,5 +287,8 @@ app.UseAuthorization();
 
 // Ánh xạ request đến đúng Controller và Action method tương ứng
 app.MapControllers();
+
+// SignalR Hub endpoint — client kết nối tới ws://localhost:PORT/hubs/match
+app.MapHub<MatchHub>("/hubs/match");
 
 app.Run();

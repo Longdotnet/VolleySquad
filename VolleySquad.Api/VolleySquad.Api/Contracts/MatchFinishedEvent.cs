@@ -4,6 +4,8 @@ namespace VolleySquad.Api.Contracts
     {
         public Guid MatchId { get; init; }
         public Guid WinningTeamId { get; init; }
-        // Thêm các thông tin cần thiết khác
+        // Danh sách thành viên đội thắng và đội thua để Ranking.Worker tính điểm
+        public List<Guid> WinningTeamMemberIds { get; init; } = new();
+        public List<Guid> LosingTeamMemberIds { get; init; } = new();
     }
 }

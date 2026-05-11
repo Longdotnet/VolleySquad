@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>dotnet-Ranking.Worker-a26394c2-4bc9-4f92-8417-e024e0d629b9</UserSecretsId>
+    <UserSecretsId>dotnet-Payment.Worker-b37504d3-5ca0-4g03-9528-f135e1e740a0</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,4 +16,5 @@
   <ItemGroup>
     <ProjectReference Include="..\VolleySquad.Api\VolleySquad.Api\VolleySquad.Api.csproj" />
   </ItemGroup>
+
 </Project>

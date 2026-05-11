@@ -1,0 +1,65 @@
+# ============================================================
+# .GITIGNORE - Các file KHÔNG được commit lên Git
+# ============================================================
+
+# ============================================================
+# ⚠️ SECURITY: Secret files - TUYỆT ĐỐI không commit!
+# ============================================================
+# User Secrets (dotnet user-secrets): Chứa JWT key, DB password, API key...
+# Lưu tại: %APPDATA%\Microsoft\UserSecrets\<project-guid>\secrets.json
+# KHÔNG nằm trong project folder nên không cần .gitignore,
+# nhưng nếu bạn tự tạo secrets.json trong project thì cần ignore.
+secrets.json
+*.secrets.json
+
+# .env files: Environment variables (thường dùng trong Docker, FE)
+.env
+.env.local
+.env.*.local
+!.env.example  # .env.example (template) thì OK để commit
+
+# ============================================================
+# .NET Build artifacts
+# ============================================================
+[Bb]in/
+[Oo]bj/
+*.user           # VS user-specific settings (IDE preferences, không phải secret)
+*.suo
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET Core
+*.DotSettings.user
+
+# ============================================================
+# Node.js / Frontend
+# ============================================================
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ============================================================
+# IDE files
+# ============================================================
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.sw?
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*

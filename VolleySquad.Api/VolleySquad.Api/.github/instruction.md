@@ -34,8 +34,8 @@ Nền tảng cộng đồng bóng chuyền, sử dụng kiến trúc Event-Drive
 ## 6. Current Backlog & Roadmap
 - [x] **Architecture:** Refactor from Monolith to Event-Driven with MassTransit & RabbitMQ.
 - [x] **Frontend:** Integrate React SPA, implement Login/Dashboard, and connect to backend APIs.
-- [ ] **Implement Ranking Logic:** Code the core logic inside `Ranking.Worker` to calculate and update `SkillPoint` based on match results.
-- [ ] **Implement Payment Worker:** Create a new worker to handle match fee deductions.
-- [ ] **Real-time UI:** Use SignalR to push live updates (e.g., slot counts) to the frontend.
-- [ ] **CI/CD:** Set up a GitHub Actions pipeline for automated build and deployment.
+- [x] **Implement Ranking Logic:** Code the core logic inside `Ranking.Worker` to calculate and update `SkillPoint` based on match results.
+- [x] **Implement Payment Worker:** Create a new worker to handle match fee deductions.
+- [x] **Real-time UI:** Use SignalR to push live updates (e.g., slot counts) to the frontend.
+- [x] **CI/CD:** Set up a GitHub Actions pipeline for automated build and deployment.
 - [ ] **AI Features:** Implement advanced team balancing and video analysis.

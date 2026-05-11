@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 using VolleySquad.Api.Infrastructure;
 
 namespace VolleySquad.Api.Controllers
@@ -60,7 +61,17 @@ namespace VolleySquad.Api.Controllers
         //
         // Task<IActionResult>: Hàm hứa sẽ trả về IActionResult SAU KHI xong việc async.
         //   Giống Promise<Response> trong JavaScript.
+        //
+        // ============================================================
+        // RATE LIMITING - Chống Brute Force (OWASP A07)
+        // ============================================================
+        // [EnableRateLimiting("LoginPolicy")]: Áp dụng giới hạn 10 req/phút cho endpoint này.
+        // Tại sao chỉ giới hạn Login mà không phải tất cả endpoint?
+        //   - Endpoint login là mục tiêu của brute force attack (thử hàng nghìn password)
+        //   - Các endpoint khác đã được bảo vệ bằng JWT ([Authorize]) nên ít bị tấn công hơn
+        //   - Rate limiting tốn thêm memory/CPU nên chỉ áp dụng nơi cần thiết
         [HttpPost("login")]
+        [EnableRateLimiting("LoginPolicy")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             // Validate input tại biên giới hệ thống (data đến từ bên ngoài luôn phải kiểm tra)
