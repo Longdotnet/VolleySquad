@@ -142,6 +142,29 @@ namespace VolleySquad.Api.Domain
         }
 
         /// <summary>
+        /// Chuyển slot từ người A sang người B.
+        /// Method này gom rule của flow AcceptSlot vào Domain để controller không phải tự nhớ
+        /// từng bước Remove/Add dễ sai hoặc quên validate trạng thái.
+        /// </summary>
+        public void TransferSlot(Guid fromMemberId, Guid toMemberId)
+        {
+            if (fromMemberId == toMemberId)
+                throw new DomainException("Không thể chuyển slot cho chính mình.", "TRANSFER_TO_SELF");
+
+            if (!HasRegistered(fromMemberId))
+                throw new DomainException("Người nhượng không còn slot trong trận này.", "FROM_MEMBER_NOT_REGISTERED");
+
+            if (HasRegistered(toMemberId))
+                throw new DomainException("Người nhận đã có slot trong trận này.", "TO_MEMBER_ALREADY_REGISTERED");
+
+            if (Status == MatchStatus.Cancelled)
+                throw new DomainException("Không thể chuyển slot cho trận đã bị huỷ.", "MATCH_CANCELLED");
+
+            RegisteredMemberIds.Remove(fromMemberId);
+            RegisteredMemberIds.Add(toMemberId);
+        }
+
+        /// <summary>
         /// Xóa Member khỏi trận (dùng khi Pass Slot hoàn tất hoặc Admin kick).
         /// </summary>
         public void RemoveMember(Guid memberId)

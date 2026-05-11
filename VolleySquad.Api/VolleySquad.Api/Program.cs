@@ -68,6 +68,7 @@ builder.Services.AddSingleton<ITeamService, TeamService>();
 // Controller inject IMemberService, không biết MemberService tồn tại.
 // → Testable: Trong unit test, inject Mock<IMemberService>() thay thế.
 builder.Services.AddScoped<IMemberService, MemberService>();
+builder.Services.AddSingleton<IPasswordService, PasswordService>();
 
 // ============================================================
 // RATE LIMITING - Chống Brute Force & DoS (OWASP A05, A04)
@@ -176,6 +177,10 @@ builder.Services.AddSwaggerGen(c =>
 // Hardcode trong code sẽ bị lộ nếu push lên Git repository!
 var jwtSecret = builder.Configuration["JwtSettings:SecretKey"]
     ?? throw new InvalidOperationException("JwtSettings:SecretKey chưa được cấu hình trong appsettings.json");
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]
+    ?? throw new InvalidOperationException("JwtSettings:Issuer chưa được cấu hình trong appsettings.json");
+var jwtAudience = builder.Configuration["JwtSettings:Audience"]
+    ?? throw new InvalidOperationException("JwtSettings:Audience chưa được cấu hình trong appsettings.json");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -184,8 +189,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,  // Bắt buộc: kiểm tra chữ ký token có khớp SecretKey không
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            ValidateIssuer = false,           // Project nhỏ: tắt check Issuer (URL phát hành token)
-            ValidateAudience = false,          // Project nhỏ: tắt check Audience (đối tượng token)
+            ValidateIssuer = true,            // Interview note: Bật để token chỉ hợp lệ từ đúng issuer của hệ thống
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,          // Tránh token bị replay cho ứng dụng khác dùng chung secret
+            ValidAudience = jwtAudience,
+            ValidateLifetime = true,
             // FIX: ClockSkew mặc định là 5 phút (server gia hạn token thêm 5 phút sau expires).
             // Đặt về Zero để token hết hạn đúng thời điểm đã set.
             ClockSkew = TimeSpan.Zero

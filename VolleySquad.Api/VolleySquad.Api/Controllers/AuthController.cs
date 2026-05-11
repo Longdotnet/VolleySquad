@@ -2,13 +2,17 @@
 // AUTH CONTROLLER - Xử lý đăng nhập và cấp JWT Token
 // ============================================================
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.RateLimiting;
 using VolleySquad.Api.Infrastructure;
+using VolleySquad.Api.Domain;
+using VolleySquad.Api.Services.Interfaces;
 
 namespace VolleySquad.Api.Controllers
 {
@@ -24,11 +28,13 @@ namespace VolleySquad.Api.Controllers
         // Lợi ích: dễ unit test (có thể mock), giảm coupling, DI container quản lý lifetime.
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IPasswordService _passwordService;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, IPasswordService passwordService)
         {
             _context = context;
             _configuration = configuration;
+            _passwordService = passwordService;
         }
 
         // ============================================================
@@ -37,7 +43,27 @@ namespace VolleySquad.Api.Controllers
         // Dùng record thay vì class vì record immutable (bất biến) — phù hợp với input.
         // KHÔNG dùng trực tiếp entity Member để tránh lộ các field nhạy cảm (Balance, Role...).
         // record trong C# tự generate: constructor, ToString, Equals, GetHashCode.
-        public record LoginRequest(string Username);
+        public sealed record LoginRequest
+        {
+            [Required, StringLength(100, MinimumLength = 3)]
+            public string Username { get; init; } = string.Empty;
+
+            [Required, StringLength(128, MinimumLength = 8)]
+            public string Password { get; init; } = string.Empty;
+        }
+
+        public sealed record MemberSummary(Guid Id, string Name, int SkillPoint, decimal Balance, string Role);
+
+        public sealed record LoginResponse(string Token, DateTime Expires, MemberSummary Member);
+
+        public sealed record ChangePasswordRequest
+        {
+            [Required, StringLength(128, MinimumLength = 8)]
+            public string CurrentPassword { get; init; } = string.Empty;
+
+            [Required, StringLength(128, MinimumLength = 8)]
+            public string NewPassword { get; init; } = string.Empty;
+        }
 
         // ============================================================
         // FIX 1: [HttpPost] thay vì [HttpGet]
@@ -75,8 +101,11 @@ namespace VolleySquad.Api.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             // Validate input tại biên giới hệ thống (data đến từ bên ngoài luôn phải kiểm tra)
-            if (string.IsNullOrWhiteSpace(request.Username))
-                return BadRequest("Tên đăng nhập không được để trống");
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var normalizedUsername = request.Username.Trim();
+            var normalizedPassword = request.Password.Trim();
 
             // ============================================================
             // FIX 2: Tìm member trong DB để lấy Role và Id thật
@@ -86,13 +115,23 @@ namespace VolleySquad.Api.Controllers
             //
             // FirstOrDefaultAsync: Trả về phần tử đầu tiên hoặc null nếu không tìm thấy.
             // Luôn dùng bản Async khi query DB để không block thread (xem giải thích async ở trên).
-            var member = await _context.Members
-                .FirstOrDefaultAsync(m => m.Name.ToLower() == request.Username.ToLower());
+            var candidates = await _context.Members
+                .Where(m => m.Name.ToLower() == normalizedUsername.ToLower())
+                .Take(2)
+                .ToListAsync();
 
-            // ⚠️ LƯU Ý PHỎNG VẤN: App thực tế cần kiểm tra PASSWORD (hash bằng bcrypt/Argon2).
-            // Project này bỏ qua vì DB không có trường Password - chỉ để demo kiến trúc JWT.
-            if (member == null)
-                return Unauthorized("Tên đăng nhập không tồn tại trong hệ thống");
+            // Generic error message để tránh username enumeration.
+            // Interview question hay gặp: "Tại sao không nói rõ sai username hay password?"
+            // -> Vì attacker có thể lợi dụng message chi tiết để dò tài khoản hợp lệ.
+            if (candidates.Count != 1)
+                return Unauthorized("Thông tin đăng nhập không đúng");
+
+            var member = candidates[0];
+            if (!member.HasPasswordConfigured())
+                return Unauthorized("Tài khoản này chưa được cấu hình mật khẩu. Liên hệ Admin để reset mật khẩu.");
+
+            if (!_passwordService.VerifyPassword(normalizedPassword, member.PasswordHash!))
+                return Unauthorized("Thông tin đăng nhập không đúng");
 
             // ============================================================
             // JWT CLAIMS - Thông tin được nhúng vào Token
@@ -113,31 +152,72 @@ namespace VolleySquad.Api.Controllers
             {
                 new Claim(ClaimTypes.NameIdentifier, member.Id.ToString()), // FIX: ID từ DB
                 new Claim(ClaimTypes.Name, member.Name),
-                new Claim(ClaimTypes.Role, member.Role)                     // FIX: Role từ DB
+                new Claim(ClaimTypes.Role, member.Role),                    // FIX: Role từ DB
+                new Claim(JwtRegisteredClaimNames.Sub, member.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.UniqueName, member.Name)
             };
 
             // FIX 4: Đọc SecretKey từ IConfiguration thay vì hardcode
             // Hardcode trong code => lộ key khi push lên GitHub => attacker tạo được token giả
+            var issuer = _configuration["JwtSettings:Issuer"]!;
+            var audience = _configuration["JwtSettings:Audience"]!;
             var secretKey = _configuration["JwtSettings:SecretKey"]!;
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expiresAt = DateTime.UtcNow.AddDays(1);
 
             var token = new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
                 claims: claims,
                 // FIX 5: UtcNow thay vì Now
                 // JWT spec (RFC 7519) yêu cầu timestamp theo UTC.
                 // Nếu dùng Now và server ở múi giờ +7, token có thể bị tính sai giờ hết hạn.
-                expires: DateTime.UtcNow.AddDays(1),
+                expires: expiresAt,
                 signingCredentials: creds
             );
 
-            return Ok(new
-            {
-                token = new JwtSecurityTokenHandler().WriteToken(token),
-                expires = DateTime.UtcNow.AddDays(1),
-                role = member.Role,
-                memberId = member.Id
-            });
+            return Ok(new LoginResponse(
+                new JwtSecurityTokenHandler().WriteToken(token),
+                expiresAt,
+                ToMemberSummary(member)));
         }
+
+        // ============================================================
+        // POST /api/auth/change-password - Người dùng tự đổi mật khẩu
+        // ============================================================
+        // Interview note:
+        //   "Tại sao endpoint đổi password phải bắt nhập current password?"
+        //   -> Vì nếu chỉ cần JWT + new password, attacker chiếm được token sẽ đổi mật khẩu
+        //      nạn nhân rất dễ dàng. Bắt current password tăng thêm 1 lớp xác minh.
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var memberIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(memberIdStr, out var memberId))
+                return Unauthorized("Token không hợp lệ hoặc thiếu thông tin định danh");
+
+            var member = await _context.Members.FindAsync(memberId);
+            if (member == null)
+                return NotFound("Không tìm thấy tài khoản");
+
+            if (!member.HasPasswordConfigured() || !_passwordService.VerifyPassword(request.CurrentPassword.Trim(), member.PasswordHash!))
+                return BadRequest("Mật khẩu hiện tại không đúng");
+
+            if (request.CurrentPassword.Trim() == request.NewPassword.Trim())
+                return BadRequest("Mật khẩu mới phải khác mật khẩu hiện tại");
+
+            member.PasswordHash = _passwordService.HashPassword(request.NewPassword.Trim());
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "Đổi mật khẩu thành công" });
+        }
+
+        private static MemberSummary ToMemberSummary(Member member) =>
+            new(member.Id, member.Name, member.SkillPoint, member.Balance, member.Role);
     }
 }

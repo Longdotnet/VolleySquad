@@ -1,6 +1,7 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using VolleySquad.Api.Contracts;
+using VolleySquad.Api.Domain.Exceptions;
 using VolleySquad.Api.Infrastructure;
 
 namespace Payment.Worker;
@@ -43,25 +44,34 @@ public class MatchFinalizedConsumer : IConsumer<MatchFinalizedEvent>
             .Where(m => evt.RegisteredMemberIds.Contains(m.Id))
             .ToListAsync(context.CancellationToken);
 
+        var insufficientMembers = members
+            .Where(m => !m.HasSufficientBalance(feePerPerson))
+            .Select(m => $"{m.Name} ({m.Balance:N0} VNĐ)")
+            .ToList();
+
+        if (insufficientMembers.Count > 0)
+        {
+            // Throw để MassTransit retry / đưa vào DLQ thay vì âm thầm tạo balance âm.
+            // Interview note: Trong event-driven system, fail fast + observability tốt hơn
+            // partial success khó debug.
+            throw new DomainException(
+                $"Không thể trừ tiền vì các thành viên không đủ số dư: {string.Join(", ", insufficientMembers)}",
+                "INSUFFICIENT_BALANCE");
+        }
+
+        using var transaction = await _context.Database.BeginTransactionAsync(context.CancellationToken);
+
         foreach (var member in members)
         {
-            member.Balance -= feePerPerson;
+            member.Deduct(feePerPerson);
 
-            if (member.Balance < 0)
-            {
-                _logger.LogWarning(
-                    "Member {MemberId} ({Name}) has insufficient balance after deduction. Balance={Balance}",
-                    member.Id, member.Name, member.Balance);
-            }
-            else
-            {
-                _logger.LogDebug(
-                    "Deducted {Fee} from Member {MemberId} ({Name}). New balance: {Balance}",
-                    feePerPerson, member.Id, member.Name, member.Balance);
-            }
+            _logger.LogDebug(
+                "Deducted {Fee} from Member {MemberId} ({Name}). New balance: {Balance}",
+                feePerPerson, member.Id, member.Name, member.Balance);
         }
 
         await _context.SaveChangesAsync(context.CancellationToken);
+        await transaction.CommitAsync(context.CancellationToken);
 
         _logger.LogInformation(
             "Fee deduction completed for MatchId={MatchId}. {Count} members charged {Fee} each.",

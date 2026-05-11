@@ -57,6 +57,12 @@ export interface TeamMember {
   role: 'Admin' | 'Member';
 }
 
+export interface Team {
+  teamName: string;
+  members: TeamMember[];
+  totalSkillPoint: number;
+}
+
 // Map với Domain/SlotTransfer.cs
 export type SlotTransferStatus = 'Pending' | 'Completed' | 'Cancelled';
 

@@ -14,6 +14,7 @@
 //   KHÔNG dùng Singleton: DbContext không thread-safe.
 //   KHÔNG dùng Transient: Mất lợi ích Unit of Work (nhiều instance = không gom được).
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using VolleySquad.Api.Domain;
 using VolleySquad.Api.Domain.Enums;
 
@@ -49,12 +50,21 @@ namespace VolleySquad.Api.Infrastructure
                 // Value Converter: List<Guid> → JSON string trong DB
                 // Vấn đề: SQL Server không có kiểu "array".
                 // Giải pháp: Serialize sang JSON string khi LƯU, Deserialize khi ĐỌC.
-                entity.Property(m => m.RegisteredMemberIds)
+                var registeredMemberIdsProperty = entity.Property(m => m.RegisteredMemberIds)
                     .HasConversion(
                         ids => System.Text.Json.JsonSerializer.Serialize(ids, (System.Text.Json.JsonSerializerOptions?)null),
                         json => System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(json, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<Guid>()
                     )
                     .HasColumnType("nvarchar(max)");
+
+                registeredMemberIdsProperty
+                    // ValueComparer giúp EF Core biết cách so sánh List<Guid> theo "nội dung"
+                    // thay vì chỉ so sánh reference của object list.
+                    // Nếu thiếu comparer, EF có thể không detect thay đổi khi mutate list in-place.
+                    .Metadata.SetValueComparer(new ValueComparer<List<Guid>>(
+                        (left, right) => left!.SequenceEqual(right!),
+                        ids => ids.Aggregate(0, (current, id) => HashCode.Combine(current, id.GetHashCode())),
+                        ids => ids.ToList()));
 
                 // Enum → String Converter: Lưu "Upcoming" thay vì 0 trong DB.
                 // Dễ debug khi query DB trực tiếp. Tốn thêm vài bytes/row nhưng đáng.
@@ -63,6 +73,11 @@ namespace VolleySquad.Api.Infrastructure
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValue(MatchStatus.Upcoming);
+
+                // decimal(18,2) tránh EF dùng precision mặc định không rõ ràng.
+                // Interview note: tiền tệ luôn nên cấu hình precision tường minh ở DB layer.
+                entity.Property(m => m.FeePerPerson)
+                    .HasColumnType("decimal(18,2)");
 
                 // ============================================================
                 // NAVIGATION PROPERTY: Match → SlotTransfers (One-to-Many)

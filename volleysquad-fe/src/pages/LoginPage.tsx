@@ -51,6 +51,7 @@ export default function LoginPage() {
   // useState<string>('') = state có type string, giá trị ban đầu là ''
   // TypeScript infer type từ initial value nên không cần viết <string> tường minh
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false); // boolean — TypeScript infer từ false
 
@@ -79,7 +80,7 @@ export default function LoginPage() {
     setError('');
     try {
       // Await API call — trong lúc này UI vẫn render, spinner hoạt động
-      const data = await login(username);
+      const data = await login(username, password);
       // Lưu token và user vào global store → axiosInstance tự gắn vào các request sau
       setAuth(data.token, data.member);
       // Điều hướng sang dashboard sau khi login thành công
@@ -88,7 +89,7 @@ export default function LoginPage() {
       // ⚠️ NOTE: Error message cố ý mơ hồ (không nói "user không tồn tại" hay "sai pass")
       // Tránh username enumeration: Hacker thử username → biết username có tồn tại không.
       // Thực tế: "Thông tin đăng nhập không đúng" là message chuẩn bảo mật.
-      setError('Tên đăng nhập không đúng hoặc server chưa chạy.');
+      setError('Thông tin đăng nhập không đúng hoặc server chưa chạy.');
     } finally {
       setLoading(false);
     }
@@ -122,7 +123,7 @@ export default function LoginPage() {
         </div>
 
         <h2 className="text-2xl font-bold text-white text-center mb-1">Đăng nhập</h2>
-        <p className="text-slate-400 text-sm text-center mb-6">Nhập tên thành viên để tiếp tục</p>
+        <p className="text-slate-400 text-sm text-center mb-6">Nhập username và mật khẩu để tiếp tục</p>
 
         {/* onSubmit trên form (không phải onClick trên button):
             Bắt cả 2 cách submit: click button VÀ nhấn Enter trong input field */}
@@ -134,6 +135,16 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="VD: Tài Admin"
+            required
+            className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500"
+          />
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Mật khẩu"
+            minLength={8}
             required
             className="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500"
           />

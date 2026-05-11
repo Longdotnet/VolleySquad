@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using MassTransit;
+using VolleySquad.Api.Contracts;
+using VolleySquad.Api.Domain.Exceptions;
 using VolleySquad.Api.Infrastructure;
 
 namespace VolleySquad.Api.Controllers
@@ -14,9 +17,14 @@ namespace VolleySquad.Api.Controllers
     public class UserController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IPublishEndpoint _publishEndpoint;
 
         // Expression-body constructor: ngắn gọn khi chỉ assign 1 field
-        public UserController(AppDbContext context) => _context = context;
+        public UserController(AppDbContext context, IPublishEndpoint publishEndpoint)
+        {
+            _context = context;
+            _publishEndpoint = publishEndpoint;
+        }
 
         // ============================================================
         // POST /api/user/deposit - Nạp tiền vào tài khoản
@@ -37,7 +45,7 @@ namespace VolleySquad.Api.Controllers
             var member = await _context.Members.FindAsync(memberId);
             if (member == null) return NotFound("Không tìm thấy người dùng");
 
-            member.Balance += amount;
+            member.Deposit(amount);
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -92,7 +100,7 @@ namespace VolleySquad.Api.Controllers
             var participantCount = match.RegisteredMemberIds.Count;
             if (participantCount == 0) return BadRequest("Không có ai đăng ký để chia tiền");
 
-            decimal feePerPerson = Math.Round(totalCourtFee / participantCount, 0); // Làm tròn VNĐ
+            decimal feePerPerson = totalCourtFee / participantCount;
 
             // Load tất cả member tham gia trong 1 query (tránh N+1 query problem)
             // N+1 problem: Vòng lặp foreach gọi FindAsync mỗi lần = N query riêng lẻ => chậm.
@@ -112,34 +120,35 @@ namespace VolleySquad.Api.Controllers
                                   $"Mỗi người cần {feePerPerson:N0} VNĐ");
             }
 
-            // TRANSACTION: Hoặc tất cả bị trừ tiền, hoặc không ai bị trừ.
-            // Đây là đảm bảo Atomicity — không xảy ra trường hợp trừ được 5/10 người rồi lỗi.
-            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                foreach (var member in participants)
-                {
-                    member.Balance -= feePerPerson;
-                }
-
-                // Đánh dấu trận đã chốt và lưu mức phí — dùng cho Pass Slot sau settle
-                match.IsSettled = true;
-                match.FeePerPerson = feePerPerson;
+                // Backward-compat endpoint: giữ route cũ nhưng đưa về cùng flow event-driven
+                // với /api/match/finalize để tránh 2 nơi xử lý tiền theo 2 kiểu khác nhau.
+                match.Settle(totalCourtFee);
 
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+
+                await _publishEndpoint.Publish(new MatchFinalizedEvent
+                {
+                    MatchId = matchId,
+                    TotalCourtFee = totalCourtFee,
+                    RegisteredMemberIds = match.RegisteredMemberIds
+                });
 
                 return Ok(new
                 {
-                    Message = $"Đã chốt trận thành công",
+                    Message = "Đã chốt trận thành công. Payment.Worker đang xử lý.",
                     TotalFee = totalCourtFee,
                     FeePerPerson = feePerPerson,
                     ParticipantCount = participantCount
                 });
             }
+            catch (DomainException ex)
+            {
+                return BadRequest(ex.Message);
+            }
             catch (Exception)
             {
-                await transaction.RollbackAsync();
                 return StatusCode(500, "Lỗi khi xử lý thanh toán, vui lòng thử lại");
             }
         }

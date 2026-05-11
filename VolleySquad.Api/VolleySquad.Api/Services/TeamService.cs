@@ -118,7 +118,7 @@ namespace VolleySquad.Api.Services
         //       ... dùng ctx ...
         //   }
         //   Pro: Không cần pass context vào. Con: Ẩn dependency, khó test hơn.
-        public async Task<TeamResult> BalanceTeamsByMatchAsync(Guid matchId)
+        public Task<TeamResult> BalanceTeamsByMatchAsync(Guid matchId)
         {
             // Method này cần DbContext nhưng TeamService là Singleton.
             // Thiết kế này không inject qua constructor — caller phải truyền context vào.
@@ -127,9 +127,9 @@ namespace VolleySquad.Api.Services
             // Tuy nhiên để giữ interface ITeamService clean (không expose AppDbContext),
             // method này được implement theo CÁCH 2 với IServiceScopeFactory trong thực tế.
             // Ở đây ta throw NotImplementedException để nhắc dev implement khi cần.
-            throw new NotImplementedException(
+            return Task.FromException<TeamResult>(new NotImplementedException(
                 "BalanceTeamsByMatchAsync cần IServiceScopeFactory injection. " +
-                "Xem comment trong TeamService.cs để implement.");
+                "Xem comment trong TeamService.cs để implement."));
         }
     }
 }

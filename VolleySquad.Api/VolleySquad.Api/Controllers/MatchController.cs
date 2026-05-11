@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Claims;
 using VolleySquad.Api.Domain;
 using VolleySquad.Api.Domain.Exceptions;
@@ -24,16 +26,18 @@ namespace VolleySquad.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly IHubContext<MatchHub> _matchHub;
+        private readonly IPasswordService _passwordService;
 
         // DI Container tự inject ITeamService và AppDbContext khi request đến.
         // Không cần new() thủ công => dễ unit test (có thể truyền mock object vào).
         // ITeamService thay vì TeamService cụ thể: Đúng chuẩn Dependency Inversion.
-        public MatchController(ITeamService teamService, AppDbContext context, IPublishEndpoint publishEndpoint, IHubContext<MatchHub> matchHub)
+        public MatchController(ITeamService teamService, AppDbContext context, IPublishEndpoint publishEndpoint, IHubContext<MatchHub> matchHub, IPasswordService passwordService)
         {
             _teamService = teamService;
             _context = context;
             _publishEndpoint = publishEndpoint;
             _matchHub = matchHub;
+            _passwordService = passwordService;
         }
 
         // ============================================================
@@ -60,15 +64,31 @@ namespace VolleySquad.Api.Controllers
         //         SkillPoint tùy ý, thậm chí tự set Role = "Admin" cho chính mình!
         [HttpPost("add-member")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AddMember([FromBody] Member member)
+        public async Task<IActionResult> AddMember([FromBody] CreateMemberRequest request)
         {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var normalizedName = request.Name.Trim();
+            var normalizedRole = request.Role.Trim();
+
+            var duplicateNameExists = await _context.Members
+                .AnyAsync(m => m.Name.ToLower() == normalizedName.ToLower());
+
+            if (duplicateNameExists)
+                return Conflict("Tên thành viên đã tồn tại. Username đăng nhập phải là duy nhất.");
+
+            var member = new Member
+            {
+                Id = Guid.NewGuid(),
+                Name = normalizedName,
+                SkillPoint = Math.Clamp(request.SkillPoint, Member.MinSkillPoint, Member.MaxSkillPoint),
+                Balance = Math.Max(request.Balance, Member.MinBalance),
+                Role = normalizedRole is "Admin" or "Member" ? normalizedRole : "Member",
+                PasswordHash = _passwordService.HashPassword(request.Password)
+            };
+
             // Server tự tạo Id, không tin vào Id từ client (tránh dùng Id trùng hoặc giả)
-            member.Id = Guid.NewGuid();
-
-            // Whitelist Role: chỉ cho phép "Admin" hoặc "Member", chặn giá trị lạ
-            if (member.Role != "Admin" && member.Role != "Member")
-                member.Role = "Member";
-
             _context.Members.Add(member);
             // SaveChangesAsync(): EF Core gom tất cả thay đổi trong DbContext và
             // gửi 1 batch INSERT lên DB (Unit of Work pattern).
@@ -76,6 +96,24 @@ namespace VolleySquad.Api.Controllers
 
             // 201 Created đúng chuẩn REST hơn 200 OK cho request tạo resource mới.
             return CreatedAtAction(nameof(GetMembers), new { id = member.Id }, member);
+        }
+
+        public sealed record CreateMemberRequest
+        {
+            [Required, StringLength(100, MinimumLength = 3)]
+            public string Name { get; init; } = string.Empty;
+
+            [Range(Member.MinSkillPoint, Member.MaxSkillPoint)]
+            public int SkillPoint { get; init; } = 50;
+
+            [Range(typeof(decimal), "0", "1000000000")]
+            public decimal Balance { get; init; }
+
+            [Required, StringLength(20)]
+            public string Role { get; init; } = "Member";
+
+            [Required, StringLength(128, MinimumLength = 8)]
+            public string Password { get; init; } = string.Empty;
         }
 
         // ============================================================
@@ -136,20 +174,17 @@ namespace VolleySquad.Api.Controllers
             //
             // "using var": [IDisposable pattern] Tự gọi Dispose() khi ra khỏi scope.
             // Nếu không CommitAsync(), transaction tự RollbackAsync() khi Dispose.
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // Serializable là isolation level chặt nhất phổ biến trong SQL Server.
+            // Interview note: đổi lấy throughput thấp hơn để giữ business invariant
+            // "không bao giờ overbook slot" khi 2 request đến cùng lúc.
+            using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
                 // FindAsync: Tìm theo Primary Key, nhanh hơn FirstOrDefaultAsync
                 // vì EF Core có thể dùng identity map cache trong cùng DbContext scope.
-                var match = await _context.Matches.FindAsync(matchId);
+                var match = await _context.Matches.FirstOrDefaultAsync(m => m.Id == matchId);
                 if (match == null) return NotFound("Không tìm thấy trận đấu");
-
-                if (match.RegisteredMemberIds.Count >= match.MaxSlots)
-                    return BadRequest("Sân đã đầy slot!");
-
-                if (match.RegisteredMemberIds.Contains(memberId))
-                    return BadRequest("Bạn đã đăng ký trận này rồi");
 
                 // AnyAsync: Chỉ kiểm tra tồn tại (SELECT TOP 1), hiệu quả hơn FindAsync
                 // khi chỉ cần biết có tồn tại hay không mà không cần load object.
@@ -157,7 +192,7 @@ namespace VolleySquad.Api.Controllers
                 if (!memberExists)
                     return NotFound("Không tìm thấy thông tin thành viên");
 
-                match.RegisteredMemberIds.Add(memberId);
+                match.RegisterMember(memberId);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync(); // Ghi vĩnh viễn vào DB
 
@@ -172,6 +207,11 @@ namespace VolleySquad.Api.Controllers
                     });
 
                 return Ok("Đăng ký thành công!");
+            }
+            catch (DomainException ex)
+            {
+                await transaction.RollbackAsync();
+                return BadRequest(ex.Message);
             }
             catch (Exception)
             {
@@ -210,10 +250,18 @@ namespace VolleySquad.Api.Controllers
         // [ApiController] tự xử lý việc này, không cần gọi thủ công.
         [HttpPost("create-match")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateMatch([FromBody] Match match)
+        public async Task<IActionResult> CreateMatch([FromBody] CreateMatchRequest request)
         {
-            match.Id = Guid.NewGuid(); // Server tự tạo Id, không tin vào Id từ client
-            if (match.MaxSlots <= 0) match.MaxSlots = 18;
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var match = new Match
+            {
+                Id = Guid.NewGuid(), // Server tự tạo Id, không tin vào Id từ client
+                PlayDate = request.PlayDate,
+                Location = request.Location.Trim(),
+                MaxSlots = request.MaxSlots <= 0 ? Match.DefaultMaxSlots : request.MaxSlots,
+            };
 
             _context.Matches.Add(match);
             await _context.SaveChangesAsync();
@@ -228,15 +276,18 @@ namespace VolleySquad.Api.Controllers
         //   PATCH: Thay một phần resource (linh hoạt hơn, phức tạp hơn với JsonPatch)
         [HttpPut("update-match/{id}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateMatch(Guid id, [FromBody] Match updatedMatch)
+        public async Task<IActionResult> UpdateMatch(Guid id, [FromBody] UpdateMatchRequest request)
         {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
             var existingMatch = await _context.Matches.FindAsync(id);
             if (existingMatch == null) return NotFound("Trận đấu không tồn tại");
 
             // Chỉ update field được phép, giữ nguyên Id và RegisteredMemberIds
-            existingMatch.Location = updatedMatch.Location;
-            existingMatch.PlayDate = updatedMatch.PlayDate;
-            existingMatch.MaxSlots = updatedMatch.MaxSlots;
+            existingMatch.Location = request.Location.Trim();
+            existingMatch.PlayDate = request.PlayDate;
+            existingMatch.MaxSlots = Math.Clamp(request.MaxSlots, Match.MinSlots, Match.AbsoluteMaxSlots);
 
             await _context.SaveChangesAsync();
             return Ok(existingMatch);
@@ -348,25 +399,14 @@ namespace VolleySquad.Api.Controllers
             if (!Guid.TryParse(memberIdStr, out var memberId))
                 return Unauthorized("Token không hợp lệ hoặc thiếu thông tin định danh");
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
                 var transfer = await _context.SlotTransfers.FindAsync(transferId);
                 if (transfer == null) return NotFound("Không tìm thấy yêu cầu nhượng slot");
-                if (transfer.ToMemberId != memberId)
-                    return Forbid(); // Chỉ người được chỉ định mới được xác nhận
-                if (transfer.Status != "Pending")
-                    return BadRequest($"Yêu cầu này đã ở trạng thái '{transfer.Status}', không thể xác nhận");
 
                 var match = await _context.Matches.FindAsync(transfer.MatchId);
                 if (match == null) return NotFound("Không tìm thấy trận đấu liên quan");
-
-                // Kiểm tra lại tính hợp lệ tại thời điểm accept (tránh race condition)
-                if (!match.RegisteredMemberIds.Contains(transfer.FromMemberId))
-                    return BadRequest("Người nhượng không còn slot trong trận này");
-
-                if (match.RegisteredMemberIds.Contains(transfer.ToMemberId))
-                    return BadRequest("Bạn đã có slot trong trận này rồi");
 
                 var fromMember = await _context.Members.FindAsync(transfer.FromMemberId);
                 var toMember = await _context.Members.FindAsync(transfer.ToMemberId);
@@ -376,21 +416,13 @@ namespace VolleySquad.Api.Controllers
                 // Xử lý tiền nếu trận đã chốt (IsSettled)
                 if (match.IsSettled)
                 {
-                    if (toMember.Balance < match.FeePerPerson)
-                        return BadRequest($"Số dư không đủ. " +
-                                          $"Cần {match.FeePerPerson:N0} VNĐ, hiện có {toMember.Balance:N0} VNĐ");
-
-                    fromMember.Balance += match.FeePerPerson; // Hoàn tiền cho người nhượng
-                    toMember.Balance -= match.FeePerPerson;   // Trừ tiền người nhận
+                    fromMember.Refund(match.FeePerPerson); // Hoàn tiền cho người nhượng
+                    toMember.Deduct(match.FeePerPerson);   // Trừ tiền người nhận
                 }
 
-                // Chuyển slot
-                match.RegisteredMemberIds.Remove(transfer.FromMemberId);
-                match.RegisteredMemberIds.Add(transfer.ToMemberId);
-
-                // Hoàn tất yêu cầu
-                transfer.Status = "Completed";
-                transfer.ResolvedAt = DateTime.UtcNow;
+                // Domain methods giúp controller chỉ diễn đạt intent nghiệp vụ.
+                transfer.Accept(memberId);
+                match.TransferSlot(transfer.FromMemberId, transfer.ToMemberId);
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -404,6 +436,11 @@ namespace VolleySquad.Api.Controllers
                     FeeRefunded = match.IsSettled ? match.FeePerPerson : 0,
                     FeeCharged = match.IsSettled ? match.FeePerPerson : 0
                 });
+            }
+            catch (DomainException ex)
+            {
+                await transaction.RollbackAsync();
+                return BadRequest(ex.Message);
             }
             catch (Exception)
             {
@@ -426,16 +463,19 @@ namespace VolleySquad.Api.Controllers
 
             var transfer = await _context.SlotTransfers.FindAsync(transferId);
             if (transfer == null) return NotFound("Không tìm thấy yêu cầu nhượng slot");
-            if (transfer.Status != "Pending")
-                return BadRequest($"Yêu cầu đã ở trạng thái '{transfer.Status}', không thể huỷ");
 
             // Chỉ người nhượng hoặc Admin mới được huỷ
             var isAdmin = User.IsInRole("Admin");
-            if (transfer.FromMemberId != memberId && !isAdmin)
-                return Forbid();
 
-            transfer.Status = "Cancelled";
-            transfer.ResolvedAt = DateTime.UtcNow;
+            try
+            {
+                transfer.Cancel(memberId, isAdmin ? "Admin" : "Member");
+            }
+            catch (DomainException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
             await _context.SaveChangesAsync();
 
             return Ok(new { Message = "Đã huỷ yêu cầu nhượng slot", TransferId = transferId });
@@ -479,11 +519,34 @@ namespace VolleySquad.Api.Controllers
             var match = await _context.Matches.FindAsync(request.MatchId);
             if (match == null) return NotFound("Không tìm thấy trận đấu");
 
+            if (request.WinningTeamMemberIds.Count == 0 || request.LosingTeamMemberIds.Count == 0)
+                return BadRequest("Phải truyền đủ danh sách đội thắng và đội thua");
+
+            var duplicateMembers = request.WinningTeamMemberIds
+                .Concat(request.LosingTeamMemberIds)
+                .GroupBy(id => id)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateMembers.Count > 0)
+                return BadRequest($"Một thành viên không thể vừa thắng vừa thua: {string.Join(", ", duplicateMembers)}");
+
             // Xác thực danh sách thành viên thuộc trận đấu
             var allRequested = request.WinningTeamMemberIds.Concat(request.LosingTeamMemberIds).ToList();
             var invalidIds = allRequested.Where(id => !match.RegisteredMemberIds.Contains(id)).ToList();
             if (invalidIds.Count > 0)
                 return BadRequest($"Một số thành viên không thuộc trận đấu này: {string.Join(", ", invalidIds)}");
+
+            try
+            {
+                match.Finish();
+                await _context.SaveChangesAsync();
+            }
+            catch (DomainException ex)
+            {
+                return BadRequest(ex.Message);
+            }
 
             // Bắn event MatchFinishedEvent lên RabbitMQ
             await _publishEndpoint.Publish(new MatchFinishedEvent
@@ -516,17 +579,34 @@ namespace VolleySquad.Api.Controllers
             var match = await _context.Matches.FindAsync(matchId);
             if (match == null) return NotFound("Không tìm thấy trận đấu");
 
-            if (match.IsSettled)
-                return BadRequest("Trận đấu này đã được chốt tiền rồi");
-
             if (match.RegisteredMemberIds.Count == 0)
                 return BadRequest("Chưa có thành viên nào đăng ký trận này");
 
             if (request.TotalCourtFee <= 0)
                 return BadRequest("Tiền sân phải lớn hơn 0");
 
-            match.FeePerPerson = request.TotalCourtFee / match.RegisteredMemberIds.Count;
-            match.IsSettled = true;
+            var participants = await _context.Members
+                .Where(m => match.RegisteredMemberIds.Contains(m.Id))
+                .ToListAsync();
+
+            var feePerPerson = request.TotalCourtFee / match.RegisteredMemberIds.Count;
+            var insufficientMembers = participants
+                .Where(m => !m.HasSufficientBalance(feePerPerson))
+                .Select(m => m.Name)
+                .ToList();
+
+            if (insufficientMembers.Count > 0)
+                return BadRequest($"Các thành viên sau chưa đủ số dư để chốt trận: {string.Join(", ", insufficientMembers)}");
+
+            try
+            {
+                match.Settle(request.TotalCourtFee);
+            }
+            catch (DomainException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
             await _context.SaveChangesAsync();
 
             await _publishEndpoint.Publish(new VolleySquad.Api.Contracts.MatchFinalizedEvent
@@ -541,9 +621,33 @@ namespace VolleySquad.Api.Controllers
                 Message = "Đã chốt tiền sân thành công. Payment.Worker đang xử lý.",
                 MatchId = matchId,
                 TotalCourtFee = request.TotalCourtFee,
-                FeePerPerson = match.FeePerPerson,
+                FeePerPerson = feePerPerson,
                 MemberCount = match.RegisteredMemberIds.Count
             });
+        }
+
+        public sealed record CreateMatchRequest
+        {
+            [Required]
+            public DateTime PlayDate { get; init; }
+
+            [Required, StringLength(200, MinimumLength = 3)]
+            public string Location { get; init; } = string.Empty;
+
+            [Range(Match.MinSlots, Match.AbsoluteMaxSlots)]
+            public int MaxSlots { get; init; } = Match.DefaultMaxSlots;
+        }
+
+        public sealed record UpdateMatchRequest
+        {
+            [Required]
+            public DateTime PlayDate { get; init; }
+
+            [Required, StringLength(200, MinimumLength = 3)]
+            public string Location { get; init; } = string.Empty;
+
+            [Range(Match.MinSlots, Match.AbsoluteMaxSlots)]
+            public int MaxSlots { get; init; } = Match.DefaultMaxSlots;
         }
 
         public record FinalizeMatchRequest(decimal TotalCourtFee);

@@ -4,6 +4,7 @@
 // Domain Entity là trung tâm của bài toán, không phụ thuộc
 // vào EF Core, ASP.NET Core, hay bất kỳ framework nào.
 // Nếu domain thay đổi (thêm/xóa field), chỉ sửa file này và tạo migration mới.
+using System.Text.Json.Serialization;
 using VolleySquad.Api.Domain.Exceptions;
 
 namespace VolleySquad.Api.Domain
@@ -40,6 +41,13 @@ namespace VolleySquad.Api.Domain
         // Role lưu dưới dạng string để JWT Claim có thể đọc trực tiếp.
         // Production app nên dùng enum và có converter, hoặc lưu riêng trong bảng Roles.
         public string Role { get; set; } = "Member"; // "Admin" hoặc "Member"
+
+        // PasswordHash lưu chuỗi đã băm + salt + metadata PBKDF2.
+        // [JsonIgnore] là "hàng rào an toàn" cuối cùng để lỡ controller nào trả raw Member
+        // thì hash cũng KHÔNG bị serialize ra API response.
+        // Interview note: Password thật KHÔNG bao giờ lưu plain text trong DB.
+        [JsonIgnore]
+        public string? PasswordHash { get; set; }
 
         // ============================================================
         // NAVIGATION PROPERTIES - EF Core Relationship
@@ -155,5 +163,11 @@ namespace VolleySquad.Api.Domain
         /// Utility method tránh magic string "Admin" rải rác code.
         /// </summary>
         public bool IsAdmin() => Role == "Admin";
+
+        /// <summary>
+        /// Kiểm tra tài khoản đã được cấu hình password chưa.
+        /// Hữu ích khi migrate dữ liệu cũ từ hệ thống chỉ-login-bằng-username.
+        /// </summary>
+        public bool HasPasswordConfigured() => !string.IsNullOrWhiteSpace(PasswordHash);
     }
 }

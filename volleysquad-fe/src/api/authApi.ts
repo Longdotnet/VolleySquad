@@ -20,6 +20,7 @@ import type { Member } from '../types/Member';
 // TypeScript báo lỗi compile ngay tại file này thay vì runtime crash.
 export interface LoginResponse {
   token: string;
+  expires: string;
   member: Member;
 }
 
@@ -34,10 +35,8 @@ export interface LoginResponse {
 // Arrow function + implicit return (concise form):
 //   const fn = (param) => expression  // Không có {} → tự động return expression
 //
-// Tại sao chỉ truyền username, không có password?
-// App này demo kiến trúc JWT + Event-Driven, không có Password trong DB.
-// Real app: Gửi { username, password }, BE hash password và so sánh với DB.
-// Hashing: bcrypt (cost factor 12+) hoặc Argon2id (khuyên dùng nhất hiện tại).
-export const login = (username: string): Promise<LoginResponse> =>
-  api.post('/Auth/login', { username }).then((r) => r.data);
+// Interview note: Login request nên luôn có password, kể cả app demo.
+// Nếu chỉ dùng username thì ai biết tên người dùng cũng lấy được JWT => auth bị vô hiệu.
+export const login = (username: string, password: string): Promise<LoginResponse> =>
+  api.post('/Auth/login', { username, password }).then((r) => r.data);
 

@@ -49,6 +49,9 @@ const MOCK_MATCH: Match = {
   location: 'Giao lưu Sân Bình Minh',
   maxSlots: 18,
   registeredMemberIds: [],
+  status: 'Upcoming',
+  isSettled: false,
+  feePerPerson: 0,
 };
 
 export default function DashboardPage() {
@@ -250,126 +253,6 @@ export default function DashboardPage() {
       </div>
 
       {/* BOTTOM NAVIGATION (Mobile only): md:hidden = ẩn trên màn hình >= 768px */}
-      <div className="md:hidden fixed bottom-4 left-4 right-4 p-4 flex justify-around items-center shadow-2xl z-50 rounded-3xl"
-        style={{ background: 'rgba(30,41,59,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <button className="text-blue-500"><i className="fas fa-home text-xl"></i></button>
-        <button className="text-slate-500"><i className="fas fa-calendar-check text-xl"></i></button>
-        <button className="bg-blue-600 w-12 h-12 rounded-full -mt-10 border-4 border-[#0f172a] shadow-lg flex items-center justify-center text-white">
-          <i className="fas fa-plus"></i>
-        </button>
-        <button className="text-slate-500"><i className="fas fa-wallet text-xl"></i></button>
-        <button className="text-slate-500"><i className="fas fa-user text-xl"></i></button>
-      </div>
-
-    </div>
-  );
-}
-
-
-  return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: '#0f172a', color: '#f1f5f9' }}>
-
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 px-6 py-4 mx-4 mt-4 mb-8 flex justify-between items-center rounded-3xl"
-        style={{ background: 'rgba(30,41,59,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <div className="flex items-center gap-2">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <i className="fas fa-volleyball text-white text-xl"></i>
-          </div>
-          <span className="font-extrabold text-xl tracking-tight">
-            VOLLEY<span className="text-blue-500">SQUAD</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="relative">
-            <i className="far fa-bell text-xl text-slate-400"></i>
-            <span className="absolute -top-1 -right-1 bg-red-500 w-2 h-2 rounded-full"></span>
-          </button>
-          <div className="flex items-center gap-2 border-l border-slate-700 pl-4">
-            <img
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name ?? 'User')}&background=random`}
-              className="w-8 h-8 rounded-full border-2 border-blue-500"
-              alt="User"
-            />
-            <span className="hidden md:block text-sm font-semibold">{user?.name ?? 'Member'}</span>
-          </div>
-          <button onClick={handleLogout} className="text-slate-500 hover:text-white text-sm">
-            <i className="fas fa-sign-out-alt"></i>
-          </button>
-        </div>
-      </nav>
-
-      <div className="container mx-auto px-4 max-w-6xl">
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
-            <i className="fas fa-exclamation-triangle mr-2"></i>{error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-          {/* Cột trái: Match + Team Split */}
-          <div className="lg:col-span-2 space-y-6">
-
-            <MatchBanner
-              match={currentMatch}
-              onRegister={() => alert('Đã đăng ký slot!')}
-              onSplitTeams={handleSplitTeams}
-              loading={loadingTeams}
-            />
-
-            {/* Chia đội */}
-            <div className="p-6 rounded-3xl" style={{ background: 'rgba(30,41,59,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold">
-                  Chia Đội Dự Kiến{' '}
-                  <span className="text-xs text-slate-500 font-normal ml-2">(Snake Draft)</span>
-                </h3>
-                <button
-                  onClick={handleSplitTeams}
-                  disabled={loadingTeams}
-                  className="text-blue-400 text-sm hover:underline disabled:opacity-50"
-                >
-                  <i className="fas fa-sync-alt mr-1"></i> Xếp lại
-                </button>
-              </div>
-
-              {teams.length === 0 ? (
-                <p className="text-slate-500 text-sm italic">Nhấn "Chia đội" để tự động phân team theo SkillPoint.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {teams.map((team, i) => (
-                    <div key={team.teamName} className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700">
-                      <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-                        <span className={`font-bold ${teamColors[i % 3]}`}>{team.teamName}</span>
-                        <span className="text-xs font-bold text-slate-500">{team.totalSkillPoint} Pts</span>
-                      </div>
-                      <ul className="space-y-2">
-                        {team.members.map((m) => (
-                          <li key={m.id} className="flex justify-between text-sm text-slate-200">
-                            <span>{m.name}</span>
-                            <span className="text-slate-500">{m.skillPoint}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* Cột phải: PlayerCard + Leaderboard */}
-          <div className="space-y-8">
-            {user && <PlayerCard member={user} />}
-            {members.length > 0 && <Leaderboard members={members} />}
-          </div>
-
-        </div>
-      </div>
-
-      {/* Bottom Mobile Menu */}
       <div className="md:hidden fixed bottom-4 left-4 right-4 p-4 flex justify-around items-center shadow-2xl z-50 rounded-3xl"
         style={{ background: 'rgba(30,41,59,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}>
         <button className="text-blue-500"><i className="fas fa-home text-xl"></i></button>
