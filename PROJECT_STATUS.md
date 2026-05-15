@@ -1,4 +1,80 @@
-# VolleySquad Project Status (As of 2026-05-10)
+# VolleySquad Project Status (As of 2026-05-15)
+
+---
+
+## MVP DEMO CHECKLIST
+
+Làm theo thứ tự từ trên xuống. Đánh dấu `[x]` khi xong.
+
+### INFRA — Phải chạy trước khi bật app
+
+- [ ] **[INFRA-1]** Chạy SQL Server & apply migration
+  ```bash
+  # Trong VolleySquad.Api/VolleySquad.Api/
+  dotnet ef database update
+  ```
+- [ ] **[INFRA-2]** Set JWT SecretKey qua User Secrets (phải đủ 32+ ký tự)
+  ```bash
+  cd VolleySquad.Api/VolleySquad.Api
+  dotnet user-secrets set "JwtSettings:SecretKey" "change-me-to-a-random-256bit-key-123456"
+  ```
+- [ ] **[INFRA-3]** Chạy RabbitMQ qua Docker
+  ```bash
+  docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+  ```
+- [ ] **[INFRA-4]** Seed dữ liệu: tạo 1 Admin + vài Member qua Swagger (`POST /api/match/add-member`), tạo 1 Match (`POST /api/match/create-match`)
+
+### FRONTEND — Fix 2 lỗi critical trước khi demo
+
+- [x] **[FE-1]** `DashboardPage`: Thay `MOCK_MATCH` bằng API call thật
+  - Gọi `getMatches()` trong `useEffect`, lấy match đầu tiên có `status === 'Upcoming'`
+  - Fallback về `MOCK_MATCH` nếu API không có match nào
+  - File: `volleysquad-fe/src/pages/DashboardPage.tsx`
+
+- [x] **[FE-2]** `DashboardPage`: Wire nút "Đăng ký ngay" → `registerSlot(currentMatch.id)`
+  - Import `registerSlot` từ `matchApi.ts`
+  - Sau khi gọi thành công: fetch lại match để cập nhật slot count (hoặc đợi SignalR push)
+  - Xử lý lỗi: hiển thị message (đã đăng ký rồi, hết slot...)
+  - File: `volleysquad-fe/src/pages/DashboardPage.tsx`
+
+- [ ] **[FE-3]** Kiểm tra `PlayerCard` hiển thị đúng Balance và SkillPoint từ Zustand store
+  - `user` được set từ login response (`LoginResponse.member`) — cần verify backend trả về đúng field
+
+### BACKEND — Verify endpoints chạy đúng
+
+- [ ] **[BE-1]** Test flow qua Swagger: Login → tạo Match → Register Slot → Finish Match → xem Ranking.Worker log
+- [ ] **[BE-2]** Verify `Payment.Worker` tiêu thụ `MatchFinalizedEvent` và trừ Balance
+
+### OPTIONAL (nếu còn thời gian)
+
+- [ ] **[OPT-1]** Admin panel nhỏ trên FE để tạo match và bấm Finish/Finalize (hiện chỉ làm được qua Swagger)
+- [ ] **[OPT-2]** Hiển thị trạng thái đăng ký của user hiện tại trên MatchBanner (đã đăng ký / chưa)
+- [ ] **[OPT-3]** Toast notification thay cho alert/error string
+
+---
+
+## CÁCH CHẠY TOÀN BỘ HỆ THỐNG (Local Dev)
+
+```bash
+# Terminal 1 - API
+cd VolleySquad.Api/VolleySquad.Api
+dotnet run
+
+# Terminal 2 - Ranking Worker
+cd Ranking.Worker
+dotnet run
+
+# Terminal 3 - Payment Worker
+cd Payment.Worker
+dotnet run
+
+# Terminal 4 - Frontend
+cd volleysquad-fe
+npm install
+npm run dev
+```
+
+---
 
 ## I. What has been DONE
 

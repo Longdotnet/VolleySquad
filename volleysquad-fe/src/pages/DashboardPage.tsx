@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { getMembers, splitTeams } from '../api/matchApi';
+import { getMembers, getMatches, registerSlot, splitTeams } from '../api/matchApi';
 import type { Member } from '../types/Member';
 import type { Match, Team } from '../types/Match';
 import MatchBanner from '../components/MatchBanner';
@@ -39,14 +39,11 @@ import { useMatchHub } from '../hooks/useMatchHub';
 // ============================================================
 // CONSTANT bên ngoài component
 // ============================================================
-// MOCK_MATCH được định nghĩa ngoài component để:
-//   1. Không bị tạo lại mỗi lần component re-render (object mới mỗi render)
-//   2. Tránh gây ra infinite loop nếu dùng làm useEffect dependency
-// Production: Thay bằng API call GET /api/match/upcoming
-const MOCK_MATCH: Match = {
+// FALLBACK_MATCH: Dùng khi API chưa có match nào (không có dữ liệu thật)
+const FALLBACK_MATCH: Match = {
   id: '00000000-0000-0000-0000-000000000001',
   playDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-  location: 'Giao lưu Sân Bình Minh',
+  location: 'Chưa có trận nào sắp tới',
   maxSlots: 18,
   registeredMemberIds: [],
   status: 'Upcoming',
@@ -61,8 +58,9 @@ export default function DashboardPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
   const [error, setError] = useState('');
-  const [currentMatch, setCurrentMatch] = useState<Match>(MOCK_MATCH);
+  const [currentMatch, setCurrentMatch] = useState<Match>(FALLBACK_MATCH);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -110,9 +108,19 @@ export default function DashboardPage() {
   //   Component body chạy mỗi lần render → gọi API vô số lần → server DDoS!
   //   useEffect với [] chỉ gọi 1 lần → đúng behavior mong muốn.
   useEffect(() => {
+    // Fetch members và upcoming match song song để tiết kiệm thời gian chờ
     getMembers()
-      .then(setMembers) // setMembers là function → viết tắt .then((data) => setMembers(data))
+      .then(setMembers)
       .catch(() => setError('Không thể tải danh sách thành viên. Kiểm tra backend.'));
+
+    getMatches()
+      .then((matches) => {
+        const upcoming = matches.find((m) => m.status === 'Upcoming');
+        if (upcoming) setCurrentMatch(upcoming);
+      })
+      .catch(() => {
+        // Giữ FALLBACK_MATCH nếu API lỗi, không show error để tránh spam
+      });
   }, []); // Empty deps = run once on mount
 
   const handleSplitTeams = async () => {
@@ -124,6 +132,24 @@ export default function DashboardPage() {
       setError('Chia đội thất bại. Cần ít nhất vài thành viên.');
     } finally {
       setLoadingTeams(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    setRegisterLoading(true);
+    setError('');
+    try {
+      await registerSlot(currentMatch.id);
+      // SignalR sẽ push SlotUpdated event để cập nhật slot count tự động.
+      // Fetch lại match để đảm bảo state đồng bộ ngay cả khi SignalR chậm.
+      const matches = await getMatches();
+      const updated = matches.find((m) => m.id === currentMatch.id);
+      if (updated) setCurrentMatch(updated);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: string } })?.response?.data;
+      setError(msg ?? 'Đăng ký thất bại. Vui lòng thử lại.');
+    } finally {
+      setRegisterLoading(false);
     }
   };
 
@@ -187,9 +213,9 @@ export default function DashboardPage() {
 
             <MatchBanner
               match={currentMatch}
-              onRegister={() => alert('Đã đăng ký slot!')}
+              onRegister={handleRegister}
               onSplitTeams={handleSplitTeams}
-              loading={loadingTeams}
+              loading={loadingTeams || registerLoading}
             />
 
             {/* TEAM SPLIT SECTION */}
