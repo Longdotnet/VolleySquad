@@ -64,11 +64,15 @@ api.interceptors.response.use(
   (response) => response, // Request thành công: trả nguyên response
   (error) => {
     if (error.response?.status === 401) {
-      // Token hết hạn → xóa state và redirect về login
-      useAuthStore.getState().logout();
-      window.location.href = '/login';
+      const token = useAuthStore.getState().token;
+      // Chỉ redirect khi user đang logged-in bị expire token.
+      // Nếu chưa có token (đang login) → để LoginForm tự xử lý error message,
+      // không redirect → tránh page reload làm mất error state.
+      if (token) {
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+      }
     }
-    // Ném lỗi tiếp để component catch và hiển thị error message cụ thể nếu cần
     return Promise.reject(error);
   }
 );

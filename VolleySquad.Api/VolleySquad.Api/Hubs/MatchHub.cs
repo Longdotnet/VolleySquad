@@ -31,5 +31,11 @@ namespace VolleySquad.Api.Hubs
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"match-{matchId}");
         }
+
+        // Admin gọi khi mở Dashboard để nhận thông báo đăng ký
+        public async Task JoinAdminGroup()
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, "admins");
+        }
     }
 }

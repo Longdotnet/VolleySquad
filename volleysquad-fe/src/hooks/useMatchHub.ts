@@ -48,62 +48,62 @@ export interface SlotUpdatePayload {
   maxSlots: number;
 }
 
-// ============================================================
-// TYPESCRIPT FUNCTION SIGNATURE
-// ============================================================
-// matchId: string | null  — null khi chưa có match được chọn
-// onSlotUpdated: callback function — pattern Observer/Event Handler
-//   Dùng callback thay vì return value vì đây là async event (không biết khi nào xảy ra)
-export function useMatchHub(matchId: string | null, onSlotUpdated: (data: SlotUpdatePayload) => void) {
-  const token = useAuthStore((s) => s.token);
+export interface AdminRegisterPayload {
+  matchId: string;
+  memberName: string;
+  registeredCount: number;
+  maxSlots: number;
+}
 
-  // useRef<T>(initialValue): Generic type T = signalR.HubConnection | null
-  // Truy cập giá trị: connectionRef.current
+export function useMatchHub(
+  matchId: string | null,
+  onSlotUpdated: (data: SlotUpdatePayload) => void,
+  onAdminNotify?: (data: AdminRegisterPayload) => void,
+  isAdmin?: boolean,
+) {
+  const token = useAuthStore((s) => s.token);
   const connectionRef = useRef<signalR.HubConnection | null>(null);
 
   useEffect(() => {
-    // Guard clause: không kết nối nếu chưa có matchId hoặc token
     if (!matchId || !token) return;
 
-    // ============================================================
-    // BUILDER PATTERN - Cấu hình kết nối từng bước
-    // ============================================================
-    // Builder Pattern: Xây dựng đối tượng phức tạp qua các bước (method chaining).
-    // Thay vì truyền 10 tham số vào constructor → gọi .withUrl().withReconnect()...
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`${import.meta.env.VITE_SIGNALR_URL ?? 'https://localhost:7202'}/hubs/match`, {
-        // accessTokenFactory: Hàm trả về token để SignalR gắn vào WebSocket handshake.
-        // WS không hỗ trợ custom header trong browser → dùng query string hoặc factory này.
-        // SignalR backend đọc từ query string và treat như Authorization header.
         accessTokenFactory: () => token,
       })
-      .withAutomaticReconnect([0, 2000, 5000, 10000]) // Retry sau: 0ms, 2s, 5s, 10s
-      .configureLogging(signalR.LogLevel.Warning) // Giảm noise trong console
+      .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .configureLogging(signalR.LogLevel.Warning)
       .build();
 
     connectionRef.current = connection;
 
-    // Đăng ký lắng nghe event "SlotUpdated" từ server.
-    // Tên event phải khớp chính xác với cái server gọi: SendAsync("SlotUpdated", data)
     connection.on('SlotUpdated', (data: SlotUpdatePayload) => {
       onSlotUpdated(data);
     });
 
-    // Start connection → rồi join vào nhóm của match cụ thể.
-    // Server sẽ chỉ gửi "SlotUpdated" cho các client trong nhóm "match-{matchId}".
+    if (isAdmin && onAdminNotify) {
+      connection.on('MemberRegistered', (data: AdminRegisterPayload) => {
+        onAdminNotify(data);
+      });
+    }
+
     connection
       .start()
-      .then(() => connection.invoke('JoinMatchGroup', matchId))
+      .then(() => {
+        connection.invoke('JoinMatchGroup', matchId).catch(() => {});
+        if (isAdmin) {
+          connection.invoke('JoinAdminGroup').catch(() => {});
+        }
+      })
       .catch((err) => console.error('SignalR connection error:', err));
 
-    // CLEANUP: Rời nhóm và đóng connection khi component unmount
     return () => {
       connection.invoke('LeaveMatchGroup', matchId).catch(() => {});
       connection.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // Giải thích: onSlotUpdated được wrap bằng useCallback ở DashboardPage
-    // nên deps chỉ cần matchId và token là đủ để trigger reconnect đúng lúc.
   }, [matchId, token]);
 }
+
+
 

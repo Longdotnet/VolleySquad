@@ -1,0 +1,133 @@
+/* ============================================================
+   ANIMATIONS — animations.css
+   Tất cả @keyframes tập trung ở đây.
+   Không viết @keyframes trong login.css hay component file.
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   ENTRY — Hiển thị phần tử khi mount
+   ---------------------------------------------------------- */
+
+@keyframes vs-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes vs-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes vs-slide-right {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+@keyframes vs-slide-left {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+
+@keyframes vs-scale-in {
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes vs-bounce-in {
+  0%   { opacity: 0; transform: scale(0.4); }
+  60%  { transform: scale(1.08); }
+  80%  { transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes vs-tab-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ----------------------------------------------------------
+   STATE FEEDBACK — Shake, Pulse, etc.
+   ---------------------------------------------------------- */
+
+@keyframes vs-shake {
+  0%, 100% { transform: translateX(0);   }
+  15%       { transform: translateX(-9px); }
+  30%       { transform: translateX(8px);  }
+  45%       { transform: translateX(-6px); }
+  60%       { transform: translateX(5px);  }
+  75%       { transform: translateX(-3px); }
+}
+
+@keyframes vs-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes vs-count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ----------------------------------------------------------
+   LOADING
+   ---------------------------------------------------------- */
+
+@keyframes vs-spin {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes vs-shimmer {
+  0%   { background-position: -200% 0;  }
+  100% { background-position:  200% 0; }
+}
+
+/* ----------------------------------------------------------
+   DECORATIVE — Particles, Orbs, Float
+   ---------------------------------------------------------- */
+
+@keyframes vs-float {
+  0%, 100% { transform: translateY(0)    rotate(0deg);  }
+  33%       { transform: translateY(-18px) rotate(6deg); }
+  66%       { transform: translateY(-9px)  rotate(-4deg); }
+}
+
+@keyframes vs-float-slow {
+  0%, 100% { transform: translateY(0)   rotate(0deg);  }
+  50%       { transform: translateY(-10px) rotate(3deg); }
+}
+
+/* Volleyball particles drifting upward in background */
+@keyframes vs-particle-rise {
+  0%   { transform: translateY(110vh) rotate(0deg);   opacity: 0;    }
+  8%   { opacity: 0.4; }
+  92%  { opacity: 0.4; }
+  100% { transform: translateY(-8vh)  rotate(540deg); opacity: 0;    }
+}
+
+@keyframes vs-orb-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.14; }
+  50%       { transform: scale(1.12); opacity: 0.24; }
+}
+
+/* ----------------------------------------------------------
+   BRAND / UI DECORATIONS
+   ---------------------------------------------------------- */
+
+@keyframes vs-glow-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35); }
+  50%       { box-shadow: 0 6px 36px rgba(59, 130, 246, 0.6),
+                          0 0   80px rgba(59, 130, 246, 0.15); }
+}
+
+/* Seamless ticker scroll: duplicate content → run at -50% stop point */
+@keyframes vs-ticker-scroll {
+  0%   { transform: translateX(0);    }
+  100% { transform: translateX(-50%); }
+}
+
+/* Server status online ring */
+@keyframes vs-status-ring {
+  0%   { transform: scale(1);   opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}

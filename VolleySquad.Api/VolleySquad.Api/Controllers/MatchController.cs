@@ -11,6 +11,7 @@ using VolleySquad.Api.Infrastructure;
 using VolleySquad.Api.Services.Interfaces;
 using MassTransit;
 using VolleySquad.Api.Contracts;
+using VolleySquad.Api.Domain.Enums;
 using VolleySquad.Api.Hubs;
 
 namespace VolleySquad.Api.Controllers
@@ -45,15 +46,40 @@ namespace VolleySquad.Api.Controllers
         // ============================================================
         // [Authorize(Roles = "Admin")]: Chỉ token có claim Role="Admin" mới được phép.
         // UseAuthorization middleware đọc ClaimsPrincipal.IsInRole("Admin") để quyết định.
+        // ============================================================
+        // GET /api/match/members?page=1&pageSize=20&search=
+        // Phân trang danh sách thành viên (Admin only)
+        // ============================================================
         [HttpGet("members")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetMembers()
+        public async Task<IActionResult> GetMembers(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null)
         {
-            // ToListAsync(): Gửi "SELECT * FROM Members" lên SQL Server.
-            // await giải phóng thread về ThreadPool trong lúc chờ DB.
-            // Không dùng .ToList() (blocking) vì thread bị đóng băng, lãng phí resource.
-            var members = await _context.Members.ToListAsync();
-            return Ok(members);
+            if (page < 1) page = 1;
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = _context.Members.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+                query = query.Where(m => m.Name.ToLower().Contains(search.ToLower()));
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderBy(m => m.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Ok(new PagedResult<object>
+            {
+                Items = items.Cast<object>().ToList(),
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
         }
 
         // ============================================================
@@ -206,6 +232,18 @@ namespace VolleySquad.Api.Controllers
                         maxSlots = match.MaxSlots
                     });
 
+                // Notify admin group
+                var member = await _context.Members.FindAsync(memberId);
+                await _matchHub.Clients
+                    .Group("admins")
+                    .SendAsync("MemberRegistered", new
+                    {
+                        matchId,
+                        memberName = member?.Name ?? "Thành viên",
+                        registeredCount = match.RegisteredMemberIds.Count,
+                        maxSlots = match.MaxSlots
+                    });
+
                 return Ok("Đăng ký thành công!");
             }
             catch (DomainException ex)
@@ -220,14 +258,54 @@ namespace VolleySquad.Api.Controllers
             }
         }
         // ============================================================
-        // GET /api/match/all-matches - Danh sách trận đấu (mọi user đã login)
+        // GET /api/match/leaderboard - Bảng xếp hạng thành viên (mọi user đã login)
+        // ============================================================
+        [HttpGet("leaderboard")]
+        [Authorize]
+        public async Task<IActionResult> GetLeaderboard()
+        {
+            var members = await _context.Members
+                .OrderByDescending(m => m.SkillPoint)
+                .Select(m => new { id = m.Id, name = m.Name, skillPoint = m.SkillPoint, role = m.Role, balance = (decimal)0 })
+                .ToListAsync();
+            return Ok(members);
+        }
+
+        // ============================================================
+        // GET /api/match/all-matches?page=1&pageSize=10&status=
+        // Phân trang danh sách trận đấu (mọi user đã login)
         // ============================================================
         [HttpGet("all-matches")]
         [Authorize]
-        public async Task<IActionResult> GetAllMatches()
+        public async Task<IActionResult> GetAllMatches(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? status = null)
         {
-            var matches = await _context.Matches.ToListAsync();
-            return Ok(matches);
+            if (page < 1) page = 1;
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = _context.Matches.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status) &&
+                Enum.TryParse<MatchStatus>(status, ignoreCase: true, out var statusEnum))
+                query = query.Where(m => m.Status == statusEnum);
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(m => m.PlayDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Ok(new PagedResult<object>
+            {
+                Items = items.Cast<object>().ToList(),
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
         }
 
         // ============================================================
@@ -288,9 +366,76 @@ namespace VolleySquad.Api.Controllers
             existingMatch.Location = request.Location.Trim();
             existingMatch.PlayDate = request.PlayDate;
             existingMatch.MaxSlots = Math.Clamp(request.MaxSlots, Match.MinSlots, Match.AbsoluteMaxSlots);
+            if (request.FeePerPerson >= 0)
+                existingMatch.FeePerPerson = request.FeePerPerson;
 
             await _context.SaveChangesAsync();
             return Ok(existingMatch);
+        }
+
+        // ============================================================
+        // PUT /api/match/update-member/{id} - Admin cập nhật thông tin thành viên
+        // ============================================================
+        [HttpPut("update-member/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateMember(Guid id, [FromBody] UpdateMemberRequest request)
+        {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var member = await _context.Members.FindAsync(id);
+            if (member == null) return NotFound("Thành viên không tồn tại");
+
+            // Kiểm tra tên trùng (nếu thay đổi tên)
+            if (!string.IsNullOrWhiteSpace(request.Name) &&
+                request.Name.Trim().ToLower() != member.Name.ToLower())
+            {
+                var nameTaken = await _context.Members
+                    .AnyAsync(m => m.Id != id && m.Name.ToLower() == request.Name.Trim().ToLower());
+                if (nameTaken)
+                    return Conflict("Tên thành viên đã tồn tại");
+                member.Name = request.Name.Trim();
+            }
+
+            member.SkillPoint = Math.Clamp(request.SkillPoint, Member.MinSkillPoint, Member.MaxSkillPoint);
+            member.Balance = Math.Max(request.Balance, Member.MinBalance);
+
+            await _context.SaveChangesAsync();
+            return Ok(member);
+        }
+
+        public sealed record UpdateMemberRequest
+        {
+            public string? Name { get; init; }
+
+            [Range(Member.MinSkillPoint, Member.MaxSkillPoint)]
+            public int SkillPoint { get; init; } = 50;
+
+            [Range(typeof(decimal), "0", "1000000000")]
+            public decimal Balance { get; init; }
+        }
+
+        // ============================================================
+        // DELETE /api/match/delete-member/{id} - Admin xóa thành viên
+        // ============================================================
+        [HttpDelete("delete-member/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteMember(Guid id)
+        {
+            var member = await _context.Members.FindAsync(id);
+            if (member == null) return NotFound("Không tìm thấy thành viên");
+
+            // Không xóa Admin cuối cùng
+            if (member.Role == "Admin")
+            {
+                var adminCount = await _context.Members.CountAsync(m => m.Role == "Admin");
+                if (adminCount <= 1)
+                    return BadRequest("Không thể xóa Admin duy nhất trong hệ thống");
+            }
+
+            _context.Members.Remove(member);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
 
         // ============================================================
@@ -307,6 +452,51 @@ namespace VolleySquad.Api.Controllers
             _context.Matches.Remove(match);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        // ============================================================
+        // POST /api/match/leave-slot/{matchId} - Member rời khỏi trận
+        // ============================================================
+        [HttpPost("leave-slot/{matchId}")]
+        [Authorize]
+        public async Task<IActionResult> LeaveSlot(Guid matchId)
+        {
+            var memberIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(memberIdStr, out var memberId))
+                return Unauthorized("Token không hợp lệ hoặc thiếu thông tin định danh");
+
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var match = await _context.Matches.FirstOrDefaultAsync(m => m.Id == matchId);
+                if (match == null) return NotFound("Không tìm thấy trận đấu");
+
+                if (match.Status != MatchStatus.Upcoming)
+                    return BadRequest("Chỉ có thể rời trận khi trận ở trạng thái Sắp diễn ra");
+
+                if (!match.RegisteredMemberIds.Contains(memberId))
+                    return BadRequest("Bạn chưa đăng ký trận này");
+
+                match.RegisteredMemberIds.Remove(memberId);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _matchHub.Clients
+                    .Group($"match-{matchId}")
+                    .SendAsync("SlotUpdated", new
+                    {
+                        matchId,
+                        registeredCount = match.RegisteredMemberIds.Count,
+                        maxSlots = match.MaxSlots
+                    });
+
+                return Ok("Rời trận thành công");
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, "Có lỗi xảy ra, vui lòng thử lại");
+            }
         }
 
         // ============================================================
@@ -648,8 +838,21 @@ namespace VolleySquad.Api.Controllers
 
             [Range(Match.MinSlots, Match.AbsoluteMaxSlots)]
             public int MaxSlots { get; init; } = Match.DefaultMaxSlots;
+
+            [Range(typeof(decimal), "0", "100000000")]
+            public decimal FeePerPerson { get; init; } = 0;
         }
 
         public record FinalizeMatchRequest(decimal TotalCourtFee);
+    }
+
+    // ─── Shared Response Types ────────────────────────────────────────────
+    public sealed class PagedResult<T>
+    {
+        public List<T> Items { get; set; } = [];
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages { get; set; }
     }
 }

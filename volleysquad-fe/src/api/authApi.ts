@@ -40,3 +40,11 @@ export interface LoginResponse {
 export const login = (username: string, password: string): Promise<LoginResponse> =>
   api.post('/Auth/login', { username, password }).then((r) => r.data);
 
+export interface RegisterResponse {
+  message: string;
+  memberName: string;
+}
+
+export const register = (name: string, password: string): Promise<RegisterResponse> =>
+  api.post('/Auth/register', { name, password }).then((r) => r.data);
+

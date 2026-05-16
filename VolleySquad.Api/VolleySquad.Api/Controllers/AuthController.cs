@@ -56,6 +56,15 @@ namespace VolleySquad.Api.Controllers
 
         public sealed record LoginResponse(string Token, DateTime Expires, MemberSummary Member);
 
+        public sealed record RegisterRequest
+        {
+            [Required, StringLength(100, MinimumLength = 2)]
+            public string Name { get; init; } = string.Empty;
+
+            [Required, StringLength(128, MinimumLength = 8)]
+            public string Password { get; init; } = string.Empty;
+        }
+
         public sealed record ChangePasswordRequest
         {
             [Required, StringLength(128, MinimumLength = 8)]
@@ -181,6 +190,42 @@ namespace VolleySquad.Api.Controllers
                 new JwtSecurityTokenHandler().WriteToken(token),
                 expiresAt,
                 ToMemberSummary(member)));
+        }
+
+        // ============================================================
+        // POST /api/auth/register - Đăng ký tài khoản mới (public, không cần auth)
+        // ============================================================
+        // Tài khoản được tạo với Role="Member", SkillPoint=30 (default).
+        // Trùng tên sẽ bị từ chối (Name dùng làm username trong hệ thống này).
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var trimmedName = request.Name.Trim();
+
+            // Kiểm tra tên đã tồn tại chưa (case-insensitive)
+            var exists = await _context.Members
+                .AnyAsync(m => m.Name.ToLower() == trimmedName.ToLower());
+
+            if (exists)
+                return Conflict("Tên tài khoản đã tồn tại. Vui lòng chọn tên khác.");
+
+            var member = new Member
+            {
+                Id           = Guid.NewGuid(),
+                Name         = trimmedName,
+                Role         = "Member",
+                SkillPoint   = 30,
+                Balance      = 0,
+                PasswordHash = _passwordService.HashPassword(request.Password.Trim()),
+            };
+
+            _context.Members.Add(member);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "Đăng ký thành công! Liên hệ Admin để kích hoạt tài khoản.", MemberName = member.Name });
         }
 
         // ============================================================

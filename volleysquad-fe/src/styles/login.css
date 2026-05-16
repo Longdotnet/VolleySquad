@@ -1,0 +1,1281 @@
+/* ============================================================
+   LOGIN PAGE STYLES — login.css
+   Import variables.css + animations.css trước, sau đó dùng
+   --vs-* tokens. Không hardcode màu, size trực tiếp ở đây.
+   ============================================================ */
+
+@import './variables.css';
+@import './animations.css';
+
+/* ============================================================
+   ROOT WRAPPER
+   ============================================================ */
+
+.login-root {
+  position: relative;
+  min-height: 100vh;            /* fallback cho trình duyệt cũ */
+  min-height: 100dvh;           /* dvh = dynamic viewport height, đúng trên iOS Safari */
+  width: 100%;
+  background: var(--vs-bg-root);
+  overflow: hidden;
+  font-family: var(--vs-font);
+  color: var(--vs-text-primary);
+  /* Tránh text reflow khi bàn phím ảo xuất hiện trên Android */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ============================================================
+   FLOATING VOLLEYBALL PARTICLES (background decoration)
+   ============================================================ */
+
+.login-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--vs-z-base);
+  overflow: hidden;
+}
+
+.login-particle {
+  position: absolute;
+  bottom: -10%;
+  font-size: 1.4rem;
+  filter: blur(0.6px);
+  opacity: 0;
+  animation: vs-particle-rise linear infinite;
+  user-select: none;
+}
+
+/* Each particle has its own position, size, speed & delay */
+.login-particle--1 { left:  8%; animation-duration: 14s; animation-delay:  0s; font-size: 1.2rem; }
+.login-particle--2 { left: 20%; animation-duration: 19s; animation-delay:  2s; font-size: 1.8rem; }
+.login-particle--3 { left: 35%; animation-duration: 12s; animation-delay:  5s; font-size: 1.0rem; }
+.login-particle--4 { left: 50%; animation-duration: 22s; animation-delay:  1s; font-size: 2.0rem; }
+.login-particle--5 { left: 63%; animation-duration: 16s; animation-delay:  7s; font-size: 1.3rem; }
+.login-particle--6 { left: 77%; animation-duration: 11s; animation-delay:  3s; font-size: 1.6rem; }
+.login-particle--7 { left: 88%; animation-duration: 24s; animation-delay:  9s; font-size: 1.0rem; }
+.login-particle--8 { left: 95%; animation-duration: 15s; animation-delay:  4s; font-size: 1.9rem; }
+
+/* ============================================================
+   SPLIT LAYOUT — Left brand panel + Right form panel
+   ============================================================ */
+
+.login-container {
+  position: relative;
+  z-index: var(--vs-z-above);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ============================================================
+   LEFT PANEL — Brand, Stats, Features, Ticker
+   ============================================================ */
+
+.login-panel-left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-space-xl);
+  padding: var(--vs-space-3xl) var(--vs-space-2xl);
+  background: var(--vs-panel-gradient);
+  border-right: 1px solid var(--vs-border);
+  overflow: hidden;
+  overflow-y: auto;
+}
+
+/* Decorative blurred color orbs */
+.login-orb {
+  position: absolute;
+  border-radius: var(--vs-radius-full);
+  filter: blur(80px);
+  pointer-events: none;
+  animation: vs-orb-pulse 7s ease-in-out infinite;
+}
+
+.login-orb--1 {
+  width: 360px;
+  height: 360px;
+  top: -90px;
+  left: -110px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.28), transparent 70%);
+  animation-delay: 0s;
+}
+
+.login-orb--2 {
+  width: 260px;
+  height: 260px;
+  bottom: 80px;
+  right: -70px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.22), transparent 70%);
+  animation-delay: 2.5s;
+}
+
+.login-orb--3 {
+  width: 200px;
+  height: 200px;
+  top: 48%;
+  left: 45%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.18), transparent 70%);
+  animation-delay: 5s;
+}
+
+/* --- Brand block --- */
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-md);
+  animation: vs-slide-right var(--vs-ease-slow) both;
+  position: relative;
+  z-index: 1;
+}
+
+.login-brand-icon {
+  font-size: 2.8rem;
+  filter: drop-shadow(0 0 18px rgba(59, 130, 246, 0.65));
+  animation: vs-float 5s ease-in-out infinite;
+  display: block;
+}
+
+.login-brand-name {
+  font-size: var(--vs-text-2xl);
+  font-weight: var(--vs-weight-extrabold);
+  letter-spacing: -0.02em;
+  color: var(--vs-text-primary);
+  line-height: 1;
+}
+
+.login-brand-name span {
+  color: var(--vs-brand-light);
+}
+
+.login-brand-tagline {
+  font-size: var(--vs-text-sm);
+  color: var(--vs-text-secondary);
+  margin-top: 5px;
+  letter-spacing: 0.025em;
+}
+
+/* --- Stats grid 2×2 --- */
+
+.login-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--vs-space-sm);
+  animation: vs-fade-up var(--vs-ease-slow) 150ms both;
+  position: relative;
+  z-index: 1;
+}
+
+.login-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--vs-space-xs);
+  padding: var(--vs-space-md) var(--vs-space-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-md);
+  text-align: center;
+  transition: border-color var(--vs-ease-base), background var(--vs-ease-base);
+  cursor: default;
+}
+
+.login-stat-card:hover {
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.07);
+}
+
+/* Loading shimmer khi đang fetch stats từ API */
+.login-stat-card--loading {
+  animation: vs-shimmer 1.5s infinite;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.login-stat-icon {
+  font-size: 1.35rem;
+}
+
+.login-stat-value {
+  font-size: var(--vs-text-xl);
+  font-weight: var(--vs-weight-extrabold);
+  color: var(--vs-brand-light);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  animation: vs-count-up var(--vs-ease-slow) both;
+}
+
+.login-stat-label {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* --- Features list --- */
+
+.login-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: vs-fade-up var(--vs-ease-slow) 300ms both;
+  position: relative;
+  z-index: 1;
+}
+
+.login-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--vs-space-md);
+  padding: var(--vs-space-sm) var(--vs-space-md);
+  border-radius: var(--vs-radius-sm);
+  transition: background var(--vs-ease-fast);
+  cursor: default;
+}
+
+.login-feature-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.login-feature-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.login-feature-title {
+  font-size: var(--vs-text-base);
+  font-weight: var(--vs-weight-semibold);
+  color: var(--vs-text-primary);
+  line-height: 1.4;
+}
+
+.login-feature-desc {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-secondary);
+  margin-top: 2px;
+  line-height: 1.55;
+}
+
+/* --- Activity Ticker --- */
+
+.login-ticker-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-sm);
+  padding: var(--vs-space-sm) var(--vs-space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  overflow: hidden;
+  animation: vs-fade-up var(--vs-ease-slow) 450ms both;
+  position: relative;
+  z-index: 1;
+}
+
+.login-ticker-label {
+  font-size: var(--vs-text-xs);
+  font-weight: var(--vs-weight-bold);
+  color: var(--vs-error);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.06em;
+}
+
+.login-ticker-track {
+  flex: 1;
+  overflow: hidden;
+  /* Fade edges for seamless look */
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  mask-image:         linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+
+.login-ticker-inner {
+  display: flex;
+  gap: var(--vs-space-2xl);
+  white-space: nowrap;
+  animation: vs-ticker-scroll 42s linear infinite;
+}
+
+.login-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vs-space-md);
+  flex-shrink: 0;
+}
+
+.login-ticker-msg {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-secondary);
+}
+
+.login-ticker-time {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-muted);
+}
+
+/* ============================================================
+   RIGHT PANEL — Form area
+   ============================================================ */
+
+.login-panel-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--vs-space-2xl) var(--vs-space-xl);
+  min-height: 100vh;
+  background: var(--vs-bg-root);
+  position: relative;
+}
+
+/* Glass-morphism card wrapping all forms */
+.login-form-card {
+  width: 100%;
+  max-width: 430px;
+  background: var(--vs-bg-card);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-xl);
+  box-shadow: var(--vs-shadow-card);
+  overflow: hidden;
+  animation: vs-scale-in var(--vs-ease-slow) both;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.login-card-header {
+  padding-top: var(--vs-space-xs);
+}
+
+/* Mobile-only brand (hidden on desktop, shown when left panel is hidden) */
+.login-mobile-brand {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vs-space-sm);
+  padding: var(--vs-space-lg) var(--vs-space-xl) 0;
+  font-size: var(--vs-text-lg);
+  font-weight: var(--vs-weight-extrabold);
+  letter-spacing: -0.01em;
+  color: var(--vs-text-primary);
+}
+
+.login-mobile-brand strong {
+  color: var(--vs-brand-light);
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+
+.login-tabs {
+  display: flex;
+  padding: var(--vs-space-sm) var(--vs-space-sm) 0;
+  gap: var(--vs-space-xs);
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.login-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px var(--vs-space-sm);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: var(--vs-radius-xs) var(--vs-radius-xs) 0 0;
+  color: var(--vs-text-muted);
+  font-size: var(--vs-text-xs);
+  font-weight: var(--vs-weight-medium);
+  font-family: var(--vs-font);
+  cursor: pointer;
+  transition:
+    color            var(--vs-ease-fast),
+    border-color     var(--vs-ease-fast),
+    background       var(--vs-ease-fast);
+  white-space: nowrap;
+}
+
+.login-tab:hover {
+  color: var(--vs-text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.login-tab.active {
+  color: var(--vs-brand-light);
+  border-bottom-color: var(--vs-brand);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.login-tab-icon {
+  font-size: 0.8rem;
+}
+
+/* ============================================================
+   TAB CONTENT AREA
+   ============================================================ */
+
+.login-tab-content {
+  padding: var(--vs-space-lg) var(--vs-space-xl) var(--vs-space-xl);
+  animation: vs-tab-enter var(--vs-ease-base) both;
+}
+
+/* ============================================================
+   FORM LAYOUT
+   ============================================================ */
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-space-md);
+}
+
+.login-form.shake {
+  animation: vs-shake 0.5s var(--vs-ease-fast);
+}
+
+/* ============================================================
+   FIELD WRAPPER
+   ============================================================ */
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-space-xs);
+}
+
+/* ============================================================
+   LABELS
+   ============================================================ */
+
+.login-label {
+  font-size: var(--vs-text-xs);
+  font-weight: var(--vs-weight-semibold);
+  color: var(--vs-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.login-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ============================================================
+   INPUT GROUP
+   ============================================================ */
+
+.login-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 0.88rem;
+  pointer-events: none;
+  opacity: 0.55;
+  z-index: 1;
+  line-height: 1;
+}
+
+.login-input {
+  width: 100%;
+  padding: 10px 40px 10px 38px;
+  background: var(--vs-bg-input);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  color: var(--vs-text-primary);
+  font-size: var(--vs-text-base);
+  font-family: var(--vs-font);
+  transition:
+    border-color var(--vs-ease-fast),
+    background   var(--vs-ease-fast),
+    box-shadow   var(--vs-ease-fast);
+  outline: none;
+}
+
+.login-input::placeholder {
+  color: var(--vs-text-muted);
+  font-size: var(--vs-text-sm);
+}
+
+.login-input:hover {
+  background: var(--vs-bg-input-hover);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.login-input:focus {
+  background: var(--vs-bg-input-focus);
+  border-color: var(--vs-border-focus);
+  box-shadow: var(--vs-shadow-input-focus);
+}
+
+/* Error state */
+.login-input.error {
+  border-color: var(--vs-border-error);
+  background: var(--vs-error-bg);
+}
+
+.login-input.error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+/* Trailing button/icon inside input (show/hide pw, status icons) */
+.login-input-action {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 0.85rem;
+  color: var(--vs-text-muted);
+  transition: color var(--vs-ease-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.login-input-action:hover {
+  color: var(--vs-text-secondary);
+}
+
+/* ============================================================
+   VALIDATION MESSAGES
+   ============================================================ */
+
+.login-field-error {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-error);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: vs-fade-up var(--vs-ease-fast) both;
+  padding-left: 4px;
+}
+
+.login-capslock-warn {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-warning);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ============================================================
+   FORM EXTRAS — Checkbox row, error banner, notices
+   ============================================================ */
+
+.login-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-xs);
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--vs-ease-fast);
+}
+
+.login-remember:hover {
+  color: var(--vs-text-primary);
+}
+
+.login-remember input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--vs-brand);
+  cursor: pointer;
+}
+
+/* Global error banner above submit button */
+.login-error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-sm);
+  padding: var(--vs-space-sm) var(--vs-space-md);
+  background: var(--vs-error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: var(--vs-radius-sm);
+  color: #fca5a5;
+  font-size: var(--vs-text-xs);
+  animation: vs-fade-up var(--vs-ease-fast) both;
+  line-height: 1.5;
+}
+
+/* Info notice in register form */
+.login-register-notice {
+  padding: var(--vs-space-sm) var(--vs-space-md);
+  background: var(--vs-info-bg);
+  border: 1px solid rgba(6, 182, 212, 0.22);
+  border-radius: var(--vs-radius-sm);
+  font-size: var(--vs-text-xs);
+  color: var(--vs-accent);
+  line-height: 1.6;
+}
+
+/* Forgot password context text */
+.login-forgot-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-space-sm);
+  font-size: var(--vs-text-sm);
+  color: var(--vs-text-secondary);
+  line-height: 1.6;
+}
+
+.login-forgot-note {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-warning);
+  padding: var(--vs-space-sm) var(--vs-space-md);
+  background: var(--vs-warning-bg);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: var(--vs-radius-sm);
+}
+
+/* ============================================================
+   DEMO CREDENTIALS
+   ============================================================ */
+
+.login-demo-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-space-xs);
+}
+
+.login-demo-label {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.login-demo-grid {
+  display: flex;
+  gap: var(--vs-space-sm);
+}
+
+.login-demo-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--vs-space-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--vs-ease-fast),
+    background   var(--vs-ease-fast);
+  gap: 3px;
+}
+
+.login-demo-btn:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.login-demo-role {
+  font-size: var(--vs-text-xs);
+  font-weight: var(--vs-weight-semibold);
+  color: var(--vs-brand-light);
+}
+
+.login-demo-user {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-muted);
+  font-family: var(--vs-font-mono);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+/* Primary — gradient, glowing */
+.login-btn-primary {
+  width: 100%;
+  padding: 12px var(--vs-space-lg);
+  background: linear-gradient(135deg, var(--vs-brand) 0%, var(--vs-brand-dark) 100%);
+  border: none;
+  border-radius: var(--vs-radius-sm);
+  color: white;
+  font-size: var(--vs-text-base);
+  font-weight: var(--vs-weight-bold);
+  font-family: var(--vs-font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vs-space-sm);
+  transition:
+    opacity   var(--vs-ease-fast),
+    transform var(--vs-ease-fast),
+    box-shadow var(--vs-ease-fast);
+  box-shadow: var(--vs-shadow-btn);
+  letter-spacing: 0.02em;
+  animation: vs-glow-pulse 3s ease-in-out infinite;
+}
+
+.login-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(59, 130, 246, 0.55);
+}
+
+.login-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-btn-primary:disabled,
+.login-btn-primary.loading {
+  opacity: 0.62;
+  cursor: not-allowed;
+  animation: none;
+  transform: none;
+}
+
+/* Secondary — ghost style */
+.login-btn-secondary {
+  width: 100%;
+  padding: 10px var(--vs-space-lg);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  color: var(--vs-text-secondary);
+  font-size: var(--vs-text-base);
+  font-weight: var(--vs-weight-medium);
+  font-family: var(--vs-font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vs-space-sm);
+  transition:
+    border-color var(--vs-ease-fast),
+    color        var(--vs-ease-fast),
+    background   var(--vs-ease-fast);
+}
+
+.login-btn-secondary:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--vs-text-primary);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.login-btn-secondary:disabled,
+.login-btn-secondary.disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+/* Spinner inside button */
+.login-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: vs-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   PASSWORD STRENGTH METER
+   ============================================================ */
+
+.login-strength-meter {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-sm);
+  margin-top: var(--vs-space-xs);
+  animation: vs-fade-in var(--vs-ease-fast) both;
+}
+
+.login-strength-bars {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.login-strength-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--vs-radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  transition: background-color var(--vs-ease-base);
+}
+
+.login-strength-label {
+  font-size: var(--vs-text-xs);
+  font-weight: var(--vs-weight-semibold);
+  min-width: 64px;
+  text-align: right;
+  transition: color var(--vs-ease-base);
+}
+
+/* ============================================================
+   AVATAR PICKER
+   ============================================================ */
+
+.login-avatar-grid {
+  display: flex;
+  gap: var(--vs-space-sm);
+}
+
+.login-avatar-item {
+  flex: 1;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--vs-ease-fast),
+    background   var(--vs-ease-fast),
+    transform    var(--vs-ease-spring);
+  padding: 0;
+}
+
+.login-avatar-item:hover {
+  border-color: rgba(59, 130, 246, 0.44);
+  background: rgba(59, 130, 246, 0.09);
+  transform: scale(1.08);
+}
+
+.login-avatar-item.selected {
+  border-color: var(--vs-brand);
+  background: rgba(59, 130, 246, 0.16);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+  transform: scale(1.06);
+}
+
+/* ============================================================
+   SUCCESS STATE (after mock form submit)
+   ============================================================ */
+
+.login-success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--vs-space-md);
+  padding: var(--vs-space-md) 0;
+  animation: vs-bounce-in var(--vs-ease-spring) both;
+}
+
+.login-success-icon {
+  font-size: 3.5rem;
+  animation: vs-bounce-in 0.6s var(--vs-ease-spring) both;
+}
+
+.login-success-title {
+  font-size: var(--vs-text-lg);
+  font-weight: var(--vs-weight-bold);
+  color: var(--vs-text-primary);
+  margin: 0;
+}
+
+.login-success-desc {
+  font-size: var(--vs-text-sm);
+  color: var(--vs-text-secondary);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.login-success-desc strong {
+  color: var(--vs-brand-light);
+}
+
+/* ============================================================
+   SERVER STATUS BAR
+   ============================================================ */
+
+.login-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--vs-space-sm);
+  padding: 6px var(--vs-space-md);
+  margin-top: var(--vs-space-md);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-full);
+}
+
+.login-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.login-status-dot.online {
+  background: var(--vs-success);
+}
+
+/* Pulsing ring to show it is live */
+.login-status-dot.online::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: var(--vs-success);
+  opacity: 0.4;
+  animation: vs-status-ring 1.6s ease-out infinite;
+}
+
+.login-status-dot.offline {
+  background: var(--vs-error);
+}
+
+.login-status-dot.checking {
+  background: var(--vs-warning);
+  animation: vs-pulse 1s ease-in-out infinite;
+}
+
+.login-status-text {
+  font-size: var(--vs-text-xs);
+  color: var(--vs-text-muted);
+  white-space: nowrap;
+}
+
+.login-status-divider {
+  color: var(--vs-text-muted);
+  opacity: 0.35;
+  font-size: var(--vs-text-xs);
+}
+
+/* ============================================================
+   SCROLLBAR (left panel overflow-y: auto)
+   ============================================================ */
+
+.login-panel-left::-webkit-scrollbar {
+  width: 4px;
+}
+
+.login-panel-left::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.login-panel-left::-webkit-scrollbar-thumb {
+  background: var(--vs-border);
+  border-radius: var(--vs-radius-full);
+}
+
+/* ============================================================
+   RESPONSIVE — Tablet (≤ 960px)
+   Ẩn left panel, hiện mobile brand header
+   ============================================================ */
+
+@media (max-width: 960px) {
+  .login-container {
+    grid-template-columns: 1fr;
+    min-height: 100dvh; /* dvh: dynamic viewport height, đúng trên iOS Safari */
+  }
+
+  .login-panel-left {
+    display: none;
+  }
+
+  .login-panel-right {
+    padding: var(--vs-space-xl) var(--vs-space-md);
+  }
+
+  .login-mobile-brand {
+    display: flex;
+  }
+
+  .login-form-card {
+    max-width: 460px;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE — Mobile (≤ 540px)
+   Layout tối ưu 1 cột, touch-friendly, safe area iOS
+   ============================================================ */
+
+@media (max-width: 540px) {
+  /* Root: căn chỉnh cho thanh địa chỉ browser mobile */
+  .login-root {
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px); /* iPhone home indicator */
+  }
+
+  /* Container: bỏ padding ngang để form chiếm tối đa */
+  .login-panel-right {
+    padding: var(--vs-space-md) var(--vs-space-sm);
+    align-items: stretch;
+  }
+
+  .login-form-card {
+    max-width: 100%;
+    border-radius: var(--vs-radius-lg);
+    /* Trên mobile không cần shadow nặng */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--vs-border);
+  }
+
+  /* Mobile brand: nhỏ gọn hơn */
+  .login-mobile-brand {
+    padding: var(--vs-space-sm) 0;
+    margin-bottom: var(--vs-space-sm);
+    font-size: var(--vs-text-md);
+  }
+
+  /* Icon emoji trong brand */
+  .login-mobile-brand > span:first-child {
+    font-size: 1.25rem;
+  }
+
+  /* Tabs: thu nhỏ, dễ chạm (touch target ≥ 44px) */
+  .login-tabs {
+    padding: var(--vs-space-xs) var(--vs-space-xs);
+    gap: var(--vs-space-xs);
+  }
+
+  .login-tab {
+    padding: 10px var(--vs-space-sm);
+    min-height: 44px; /* WCAG touch target */
+    font-size: var(--vs-text-sm);
+    gap: var(--vs-space-xs);
+  }
+
+  /* Trên màn hình rất nhỏ (< 380px) ẩn chữ label, chỉ hiện icon */
+  .login-tab-label {
+    display: none;
+  }
+
+  .login-tab {
+    gap: 0;
+  }
+
+  .login-tab-icon {
+    font-size: 1.1rem;
+  }
+
+  /* Tab content padding cân bằng */
+  .login-tab-content {
+    padding: var(--vs-space-md) var(--vs-space-md) var(--vs-space-lg);
+  }
+
+  /* Input: touch-friendly height */
+  .login-input {
+    min-height: 48px;
+    font-size: 16px; /* Tránh iOS zoom khi focus input nhỏ hơn 16px */
+    padding: 0 var(--vs-space-md);
+  }
+
+  /* Input có icon action bên phải */
+  .login-input-wrap .login-input {
+    padding-right: 48px;
+  }
+
+  .login-input-action {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Label: đủ lớn để đọc */
+  .login-label {
+    font-size: var(--vs-text-sm);
+    margin-bottom: var(--vs-space-xs);
+  }
+
+  /* Form field gap */
+  .login-form {
+    gap: var(--vs-space-md);
+  }
+
+  /* Button: chiều cao thoải mái, chạm dễ */
+  .login-btn-primary,
+  .login-btn-secondary {
+    min-height: 52px;
+    font-size: var(--vs-text-base);
+    border-radius: var(--vs-radius-md);
+  }
+
+  /* Options row (Remember + Forgot): stack trên 2 dòng nếu cần */
+  .login-options-row {
+    flex-wrap: wrap;
+    gap: var(--vs-space-sm);
+  }
+
+  /* Demo credentials: 1 cột thay vì 2 cột */
+  .login-demo-grid {
+    flex-direction: column;
+    gap: var(--vs-space-sm);
+  }
+
+  .login-demo-btn {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  /* Error banner */
+  .login-error-banner {
+    font-size: var(--vs-text-sm);
+    padding: var(--vs-space-sm) var(--vs-space-md);
+  }
+
+  /* Strength meter */
+  .login-strength-meter {
+    gap: var(--vs-space-xs);
+  }
+
+  /* Avatar picker: 3 cột thay vì 6 hàng ngang */
+  .login-avatar-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--vs-space-sm);
+  }
+
+  .login-avatar-item {
+    width: 100%;
+    aspect-ratio: 1;
+    font-size: 1.5rem;
+    min-height: 52px;
+  }
+
+  /* Status bar: wrap, center */
+  .login-status-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--vs-space-xs);
+    padding: var(--vs-space-xs) var(--vs-space-sm);
+    font-size: var(--vs-text-xs);
+  }
+
+  /* Register notice */
+  .login-register-notice {
+    font-size: var(--vs-text-sm);
+    text-align: center;
+    padding: var(--vs-space-sm);
+  }
+
+  /* Forgot password info */
+  .login-forgot-info {
+    padding: var(--vs-space-md);
+    font-size: var(--vs-text-sm);
+  }
+}
+
+/* ============================================================
+   RESPONSIVE — Extra small (≤ 380px)
+   Màn hình rất nhỏ: SE 1st gen, Android cũ
+   ============================================================ */
+
+@media (max-width: 380px) {
+  .login-panel-right {
+    padding: var(--vs-space-sm) var(--vs-space-xs);
+  }
+
+  .login-tab-content {
+    padding: var(--vs-space-sm) var(--vs-space-sm) var(--vs-space-md);
+  }
+
+  .login-form {
+    gap: var(--vs-space-sm);
+  }
+
+  .login-input {
+    min-height: 44px;
+  }
+
+  .login-btn-primary,
+  .login-btn-secondary {
+    min-height: 48px;
+  }
+
+  /* Ẩn demo section trên màn nhỏ nhất để tiết kiệm không gian */
+  .login-demo-section {
+    display: none;
+  }
+}
+
+/* ============================================================
+   LANDSCAPE MOBILE — Xoay ngang điện thoại
+   ============================================================ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .login-root {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .login-panel-right {
+    padding: var(--vs-space-sm) var(--vs-space-md);
+    min-height: auto;
+  }
+
+  .login-form-card {
+    /* Cho phép scroll khi bàn phím ảo chiếm nửa màn hình */
+    max-height: none;
+  }
+
+  /* Ẩn particles + orbs để tiết kiệm GPU khi xoay ngang */
+  .login-particles,
+  .login-orb {
+    display: none;
+  }
+
+  .login-mobile-brand {
+    margin-bottom: var(--vs-space-xs);
+    padding: var(--vs-space-xs) 0;
+  }
+
+  .login-tabs {
+    padding: var(--vs-space-xs);
+  }
+
+  .login-tab-content {
+    padding: var(--vs-space-sm) var(--vs-space-md);
+  }
+}
+
+/* ============================================================
+   REDUCED MOTION — Respect user preferences
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .login-particle,
+  .login-orb,
+  .login-brand-icon,
+  .login-ticker-inner,
+  .login-btn-primary,
+  .login-status-dot.online::after {
+    animation: none;
+  }
+
+  .login-form.shake {
+    animation: none;
+  }
+
+  .login-tab-content,
+  .login-form-card,
+  .login-success-state {
+    animation: none;
+  }
+}
+

@@ -85,6 +85,23 @@ namespace VolleySquad.Api.Controllers
         }
 
         // ============================================================
+        // GET /api/user/me - Lấy thông tin cá nhân của user hiện tại
+        // ============================================================
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> GetMe()
+        {
+            var memberIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(memberIdStr, out var memberId))
+                return Unauthorized("Token không hợp lệ");
+
+            var member = await _context.Members.FindAsync(memberId);
+            if (member == null) return NotFound("Không tìm thấy thành viên");
+
+            return Ok(member);
+        }
+
+        // ============================================================
         // POST /api/user/finalize-match/{matchId} - Admin chốt tiền sân
         // ============================================================
         // Quy trình: Tính phí/người → kiểm tra đủ tiền → trừ tiền tất cả (trong Transaction)

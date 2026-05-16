@@ -111,13 +111,20 @@ builder.Services.AddRateLimiter(options =>
 // AllowAnyHeader + AllowAnyMethod: OK cho development.
 // PRODUCTION: Hạn chế Method (GET, POST, PUT, DELETE) và Header cụ thể.
 // AllowCredentials: Bắt buộc cho SignalR WebSocket (gửi cookie/header auth qua WS).
+// Đọc danh sách allowed origins từ config (hỗ trợ thêm IP điện thoại mà không cần sửa code)
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173", "https://localhost:5173"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevFrontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        // SetIsOriginAllowed cho phép CORS động (AllowAnyOrigin() không tương thích với AllowCredentials())
+        policy.SetIsOriginAllowed(origin =>
+                  allowedOrigins.Any(allowed => origin.Equals(allowed, StringComparison.OrdinalIgnoreCase))
+              )
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials()); // AllowCredentials bắt buộc cho SignalR WebSocket
+              .AllowCredentials());
 });
 
 // SignalR: Real-time communication hub
@@ -187,16 +194,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuerSigningKey = true,  // Bắt buộc: kiểm tra chữ ký token có khớp SecretKey không
+            ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            ValidateIssuer = true,            // Interview note: Bật để token chỉ hợp lệ từ đúng issuer của hệ thống
+            ValidateIssuer = true,
             ValidIssuer = jwtIssuer,
-            ValidateAudience = true,          // Tránh token bị replay cho ứng dụng khác dùng chung secret
+            ValidateAudience = true,
             ValidAudience = jwtAudience,
             ValidateLifetime = true,
-            // FIX: ClockSkew mặc định là 5 phút (server gia hạn token thêm 5 phút sau expires).
-            // Đặt về Zero để token hết hạn đúng thời điểm đã set.
             ClockSkew = TimeSpan.Zero
+        };
+
+        // FIX: SignalR WebSocket không thể gửi Authorization header từ browser.
+        // Token được gắn vào query string ?access_token=<token> bởi SignalR client.
+        // Middleware JWT mặc định chỉ đọc header => phải đọc thêm từ query string.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -229,6 +252,10 @@ builder.Services.AddAuthorization();
 //   1. Lộ credentials khi push lên GitHub
 //   2. Production RabbitMQ không cho phép "guest" login từ remote host
 //   3. Không thể thay đổi credentials mà không cần sửa code và redeploy
+
+// Health Checks — kiểm tra trạng thái app, dùng bởi GET /health
+builder.Services.AddHealthChecks();
+
 var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
 var rabbitUser = builder.Configuration["RabbitMQ:Username"] ?? "guest";
 var rabbitPass = builder.Configuration["RabbitMQ:Password"] ?? "guest";
@@ -246,11 +273,32 @@ builder.Services.AddMassTransit(x =>
             h.Password(rabbitPass);
         });
 
+        // Exponential backoff khi RabbitMQ chưa chạy:
+        // Thử lại 5 lần, khoảng cách tăng dần 5s → 30s → 120s
+        // Tránh spam log mỗi giây vào console
+        cfg.UseMessageRetry(r =>
+            r.Exponential(
+                retryLimit:    5,
+                minInterval:   TimeSpan.FromSeconds(5),
+                maxInterval:   TimeSpan.FromSeconds(120),
+                intervalDelta: TimeSpan.FromSeconds(10)));
+
         cfg.ConfigureEndpoints(context);
     });
 });
 
 var app = builder.Build();
+
+// ============================================================
+// SEED DỮ LIỆU KHI KHỞI ĐỘNG (chỉ chạy nếu DB trống)
+// ============================================================
+// Gọi DbSeeder.SeedAsync() để tạo dữ liệu mẫu khi app lần đầu khởi động.
+// Idempotent: SeedAsync tự kiểm tra Members.Any() trước khi insert.
+// Phải tạo scope mới vì DbContext là Scoped service (không phải Singleton).
+using (var seedScope = app.Services.CreateScope())
+{
+    await VolleySquad.Api.Infrastructure.DbSeeder.SeedAsync(seedScope.ServiceProvider);
+}
 
 // ============================================================
 // GIAI ĐOẠN 2: MIDDLEWARE PIPELINE - Câu hỏi phỏng vấn quan trọng!
@@ -283,7 +331,11 @@ app.UseCors("DevFrontend");
 app.UseRateLimiter();
 
 // Tự động chuyển hướng HTTP sang HTTPS (bảo mật truyền tải)
-app.UseHttpsRedirection();
+// Chỉ bật trong Production — Development dùng HTTP từ điện thoại sẽ bị redirect loop
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Bước 1: Đọc JWT từ header "Authorization: Bearer <token>",
 //         giải mã, validate, và tạo ra ClaimsPrincipal (User object)
@@ -298,5 +350,15 @@ app.MapControllers();
 
 // SignalR Hub endpoint — client kết nối tới ws://localhost:PORT/hubs/match
 app.MapHub<MatchHub>("/hubs/match");
+
+// Health check endpoint — dùng bởi ServerStatusBar trên trang Login
+// GET /health → { status: "Healthy" }
+// Loại bỏ MassTransit check (RabbitMQ có thể không chạy) — chỉ check DB/app
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    // Bỏ qua health check của MassTransit (tag "masstransit") khi RabbitMQ không chạy
+    // Endpoint này chỉ phản ánh trạng thái DB và API, không phụ thuộc RabbitMQ
+    Predicate = check => !check.Tags.Contains("masstransit")
+});
 
 app.Run();

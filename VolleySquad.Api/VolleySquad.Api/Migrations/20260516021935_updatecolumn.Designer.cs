@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VolleySquad.Api.Infrastructure;
 
@@ -11,9 +12,11 @@ using VolleySquad.Api.Infrastructure;
 namespace VolleySquad.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260516021935_updatecolumn")]
+    partial class updatecolumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -58,46 +61,6 @@ namespace VolleySquad.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Matches");
-                });
-
-            modelBuilder.Entity("VolleySquad.Api.Domain.MatchActivity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("OccurredAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("RelatedMatchId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("RelatedMemberId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventType")
-                        .HasDatabaseName("IX_MatchActivities_EventType");
-
-                    b.HasIndex("OccurredAt")
-                        .IsDescending()
-                        .HasDatabaseName("IX_MatchActivities_OccurredAt");
-
-                    b.HasIndex("RelatedMemberId")
-                        .HasDatabaseName("IX_MatchActivities_RelatedMemberId");
-
-                    b.ToTable("MatchActivities");
                 });
 
             modelBuilder.Entity("VolleySquad.Api.Domain.Member", b =>

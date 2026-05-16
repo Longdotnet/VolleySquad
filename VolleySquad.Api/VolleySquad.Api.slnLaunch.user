@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "VolleySquad.Api\\VolleySquad.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "..\\Ranking.Worker\\Ranking.Worker.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

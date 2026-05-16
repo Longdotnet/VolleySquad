@@ -33,6 +33,11 @@ namespace VolleySquad.Api.Infrastructure
         public DbSet<Match> Matches { get; set; }
         public DbSet<SlotTransfer> SlotTransfers { get; set; }
 
+        // MatchActivities: Bảng nhật ký hoạt động hệ thống (append-only).
+        // Được dùng bởi PublicController để hiển thị feed hoạt động trang login
+        // và trang dashboard (không cần auth để đọc).
+        public DbSet<MatchActivity> MatchActivities { get; set; }
+
         // ============================================================
         // ONMODELCREATING - Cấu hình EF Core với Fluent API
         // ============================================================
@@ -136,6 +141,37 @@ namespace VolleySquad.Api.Infrastructure
                 // "Tìm tất cả Pending transfer của Match X" → rất phổ biến.
                 entity.HasIndex(st => new { st.MatchId, st.Status })
                     .HasDatabaseName("IX_SlotTransfers_MatchId_Status");
+            });
+
+            // ============================================================
+            // MATCH ACTIVITY - Cấu hình bảng MatchActivities
+            // ============================================================
+            modelBuilder.Entity<MatchActivity>(entity =>
+            {
+                // Enum → String cho EventType: "MemberJoinedMatch" dễ đọc hơn "1"
+                entity.Property(a => a.EventType)
+                    .HasConversion<string>()
+                    .HasMaxLength(40);
+
+                // Message không nên quá dài (tối đa 500 ký tự là đủ cho feed)
+                entity.Property(a => a.Message)
+                    .HasMaxLength(500)
+                    .IsRequired();
+
+                // Index trên OccurredAt DESC cho query "20 hoạt động gần nhất"
+                // Query phổ biến nhất: SELECT TOP 20 ... ORDER BY OccurredAt DESC
+                // Nếu không có index: full table scan mỗi lần tải trang login.
+                entity.HasIndex(a => a.OccurredAt)
+                    .HasDatabaseName("IX_MatchActivities_OccurredAt")
+                    .IsDescending(true);
+
+                // Index trên EventType để filter theo loại sự kiện
+                entity.HasIndex(a => a.EventType)
+                    .HasDatabaseName("IX_MatchActivities_EventType");
+
+                // Index trên RelatedMemberId để xem lịch sử của 1 thành viên cụ thể
+                entity.HasIndex(a => a.RelatedMemberId)
+                    .HasDatabaseName("IX_MatchActivities_RelatedMemberId");
             });
         }
     }
