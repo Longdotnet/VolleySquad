@@ -1074,6 +1074,11 @@ function MatchPanel({ match, loading, currentUserId, registering, leaving, isAdm
                   ⚖️ Chia đội
                 </button>
               )}
+              {isAdmin && !isFallback && (
+                <button className="dash-btn dash-btn--secondary" onClick={onEdit}>
+                  ✏️ Sửa
+                </button>
+              )}
             </div>
             {teams.length > 0 && (
               <div style={{ marginTop: "1.25rem" }}>

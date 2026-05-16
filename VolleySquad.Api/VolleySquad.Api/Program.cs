@@ -111,20 +111,13 @@ builder.Services.AddRateLimiter(options =>
 // AllowAnyHeader + AllowAnyMethod: OK cho development.
 // PRODUCTION: Hạn chế Method (GET, POST, PUT, DELETE) và Header cụ thể.
 // AllowCredentials: Bắt buộc cho SignalR WebSocket (gửi cookie/header auth qua WS).
-// Đọc danh sách allowed origins từ config (hỗ trợ thêm IP điện thoại mà không cần sửa code)
-var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:5173", "https://localhost:5173"];
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevFrontend", policy =>
-        // SetIsOriginAllowed cho phép CORS động (AllowAnyOrigin() không tương thích với AllowCredentials())
-        policy.SetIsOriginAllowed(origin =>
-                  allowedOrigins.Any(allowed => origin.Equals(allowed, StringComparison.OrdinalIgnoreCase))
-              )
+        policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials());
+              .AllowCredentials()); // AllowCredentials bắt buộc cho SignalR WebSocket
 });
 
 // SignalR: Real-time communication hub
@@ -331,11 +324,7 @@ app.UseCors("DevFrontend");
 app.UseRateLimiter();
 
 // Tự động chuyển hướng HTTP sang HTTPS (bảo mật truyền tải)
-// Chỉ bật trong Production — Development dùng HTTP từ điện thoại sẽ bị redirect loop
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.UseHttpsRedirection();
 
 // Bước 1: Đọc JWT từ header "Authorization: Bearer <token>",
 //         giải mã, validate, và tạo ra ClaimsPrincipal (User object)
